@@ -1,0 +1,61 @@
+{
+  "name": "nocturne-player-edge",
+  "version": "0.9.1-edge",
+  "private": true,
+  "description": "A touch-first video player for Chromium browsers (Microsoft Edge port of Nocturne Player)",
+  "license": "MPL-2.0",
+  "author": "Vlad Pohorilets",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvachikk/nocturne-player.git"
+  },
+  "homepage": "https://github.com/kvachikk/nocturne-player",
+  "bugs": {
+    "url": "https://github.com/kvachikk/nocturne-player/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:clean": "node esbuild.config.mjs --clean",
+    "package": "npm run build && python3 -m zipfile -c artifacts/nocturne-edge.zip dist",
+    "start": "npm run build && microsoft-edge-stable --user-data-dir=$(mktemp -d /tmp/edge-nocturne-XXXXXX) --load-extension=./dist",
+    "lint": "eslint . && prettier --check \"**/*.{js,mjs,json,md,css,html}\" && npm run lint:privacy",
+    "lint:privacy": "node tools/check-privacy.mjs",
+    "fix": "eslint . --fix && prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
+    "test": "node --test",
+    "fixture": "node tools/make-fixture.mjs",
+    "serve": "node tools/serve.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css,html}": [
+      "prettier --write"
+    ],
+    "src/**": [
+      "node tools/check-privacy.mjs"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
+    "esbuild": "0.28.2",
+    "eslint": "10.11.0",
+    "eslint-config-metarhia": "9.2.1",
+    "globals": "17.12.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "playwright-core": "^1.64.1",
+    "prettier": "3.9.9",
+    "web-ext": "10.7.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}

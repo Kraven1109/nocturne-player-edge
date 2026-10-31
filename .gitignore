@@ -1,0 +1,7 @@
+# Nocturne Player Edge Port - Ignore
+node_modules/
+dist/
+artifacts/
+_scratch/
+*.log
+
