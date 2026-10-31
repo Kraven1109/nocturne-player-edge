@@ -1,5 +1,7 @@
 dist
 artifacts
 node_modules
+_scratch
 package-lock.json
 CHANGELOG.md
+/AGENTS.md

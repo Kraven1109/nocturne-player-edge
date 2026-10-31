@@ -33,7 +33,8 @@ const resolveHosts = () => {
 const isDocumentSupported = () =>
   document.contentType === 'text/html' &&
   location.protocol !== 'about:' &&
-  location.protocol !== 'moz-extension:';
+  location.protocol !== 'moz-extension:' &&
+  location.protocol !== 'chrome-extension:';
 
 const start = async () => {
   if (!isDocumentSupported()) return;
@@ -94,9 +95,10 @@ const start = async () => {
     apply(next);
   });
 
-  browser.runtime.onMessage.addListener((message) => {
+  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'query-state') return false;
-    return Promise.resolve({ videoCount: watcher.getCount() });
+    sendResponse({ videoCount: watcher.getCount() });
+    return true;
   });
 };
 

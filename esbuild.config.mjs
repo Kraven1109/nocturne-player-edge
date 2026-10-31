@@ -13,7 +13,10 @@ const BROWSER_SHIM =
   'globalThis.browser = globalThis.browser || globalThis.chrome;';
 
 const staticAssets = [
-  { from: `${SOURCE_DIR}/manifest.json`, to: `${OUTPUT_DIR}/manifest.json` },
+  {
+    from: `${SOURCE_DIR}/manifest.mv3.json`,
+    to: `${OUTPUT_DIR}/manifest.json`,
+  },
   { from: `${SOURCE_DIR}/icons`, to: `${OUTPUT_DIR}/icons` },
   { from: `${SOURCE_DIR}/popup/popup.html`, to: `${OUTPUT_DIR}/popup.html` },
   { from: `${SOURCE_DIR}/popup/popup.css`, to: `${OUTPUT_DIR}/popup.css` },
@@ -63,12 +66,13 @@ const buildAll = async () => {
   }
 
   for (const bundle of bundles) {
-    await build({
+    const options = {
       ...bundleOptions,
       entryPoints: [bundle.entry],
       outfile: bundle.out,
-      ...(bundle.banner ? { banner: { js: bundle.banner } } : {}),
-    });
+    };
+    if (bundle.banner) options.banner = { js: bundle.banner };
+    await build(options);
   }
 
   console.log(`Built ${bundles.length} bundles into ${OUTPUT_DIR}/`);

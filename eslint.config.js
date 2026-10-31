@@ -5,7 +5,7 @@ const [baseConfig] = configMetarhia;
 
 export default [
   {
-    ignores: ['dist/*', 'artifacts/*', 'node_modules/*'],
+    ignores: ['dist/*', 'artifacts/*', 'node_modules/*', '_scratch/*'],
   },
   {
     ...baseConfig,

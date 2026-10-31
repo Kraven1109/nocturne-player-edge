@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Nocturne Player",
+  "version": "0.9.1",
+  "description": "Touch-first video player: thick seek bar, gestures, quality/subtitle picker, night light and colour tuning.",
+  "minimum_chrome_version": "111",
+  "author": "Vlad Pohorilets",
+  "homepage_url": "https://github.com/kvachikk/nocturne-player",
+  "permissions": ["storage", "activeTab"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Nocturne Player",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": ["pageagent.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "js": ["content.js"]
+    }
+  ]
+}
