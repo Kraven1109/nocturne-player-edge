@@ -1,5 +1,4 @@
-import { call } from './pageapi.js';
-import { findEngines } from './engines.js';
+import { playerjsId } from '../page/bridge.js';
 
 // A series carries its playlist as a path — a season, a dub, an episode — and
 // Playerjs draws one element per step of that path, each holding the value it
@@ -72,8 +71,7 @@ const press = (target) => {
   target.dispatchEvent(new MouseEvent('click', shared));
 };
 
-export const createPlaylist = (video, host = null) => {
-  let player = null;
+export const createPlaylist = (video) => {
   let playerId = '';
   let levels = [];
 
@@ -83,10 +81,7 @@ export const createPlaylist = (video, host = null) => {
   const refresh = () => {
     levels = [];
     playerId = '';
-    player = findEngines(video, host).playerjs ?? null;
-    if (player === null) return false;
-
-    const id = call(player, 'api', 'id');
+    const id = playerjsId(video);
     if (typeof id !== 'string' || id === '') return false;
     playerId = id;
 

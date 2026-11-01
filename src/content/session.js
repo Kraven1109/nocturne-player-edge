@@ -1,17 +1,9 @@
 import { createOverlay } from './ui.js';
 import { createShadowHost, el, pinStyle } from './shell.js';
-import { findApiAncestor } from './video/pageapi.js';
+import { cacheHost } from './page/bridge.js';
 import { findFeedScroller, stepFeed, waitForNextVideo } from './video/feed.js';
 import { lockPageFullscreen } from './fullscreenlock.js';
 import playerCss from './player.css';
-
-// The names a site's own player hangs off the element wrapping the video.
-const PLAYER_API_MARKERS = [
-  'getAvailableQualityLevels',
-  'setPlaybackQualityRange',
-  'getOption',
-  'levels',
-];
 
 const STALL_GRACE_MS = 400;
 // Long enough for a site to finish re-attaching its stream. A scrub past the
@@ -298,7 +290,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   // over it, and returns what is needed to hand it back exactly as it was.
   const show = (video, { shouldPlay, isChromeShown }) => {
     const state = captureVideoState(video);
-    const playerHost = findApiAncestor(video, PLAYER_API_MARKERS);
+    cacheHost(video);
     const anchor = document.createComment('nocturne-player');
     const own = createScope();
 
@@ -354,7 +346,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       onExit: () => actions.exit(),
       settings,
       onPersist,
-      playerHost,
       onFeedStep: (direction) => actions.step(direction),
       onFullscreen: () => actions.fullscreen(),
       isChromeShown,

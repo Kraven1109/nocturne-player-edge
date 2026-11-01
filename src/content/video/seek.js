@@ -1,4 +1,4 @@
-import { call, isFunction } from './pageapi.js';
+import { seekOnSite } from '../page/bridge.js';
 
 // Writing to currentTime asks the browser to move a stream the site is still in
 // charge of. A site feeding the element through Media Source Extensions can
@@ -13,14 +13,13 @@ import { call, isFunction } from './pageapi.js';
 // off asks for the second. Telling YouTube that every preview was final made it
 // rebuild its stream — and its <video> element — under a finger that was still
 // moving, which took the player down with it.
-export const createSeeker = (video, host) => {
-  const isSiteSeekable = isFunction(host, 'seekTo');
-
-  return (seconds, isFinal = true) => {
+export const createSeeker =
+  (video) =>
+  (seconds, isFinal = true) => {
     const limit = Number.isFinite(video.duration) ? video.duration : seconds;
     const time = Math.min(limit, Math.max(0, seconds));
-    if (isSiteSeekable) call(host, 'seekTo', time, isFinal);
-    else video.currentTime = time;
+    if (!seekOnSite(video, time, isFinal)) {
+      video.currentTime = time;
+    }
     return time;
   };
-};

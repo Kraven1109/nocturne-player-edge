@@ -921,7 +921,8 @@
 
 /* Hidden controls must not swallow a tap meant for the picture underneath. */
 .chrome[hidden] .centre-row > *,
-.chrome[hidden] .topbar {
+.chrome[hidden] .topbar,
+.chrome[hidden] .seek-area {
   pointer-events: none;
 }
 
@@ -949,26 +950,30 @@
 
 .seek-area {
   --progress: 0%;
+  --preview: 0%;
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
+  padding: 10px 0;
+  margin: -10px 0;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
 }
 
-/* The scrub time rides the tip of the line rather than sitting in the middle. */
-.seek-time {
+/* Preview card (thumbnail + chapter + scrub time) rides the hovered/scrubbed
+   position above the seek track. */
+.seek-preview {
   position: absolute;
-  bottom: calc(100% + 12px);
-  left: var(--progress);
+  bottom: calc(100% + 6px);
+  left: var(--preview);
   transform: translateX(-50%) scale(0.94);
-  padding: 4px 10px;
-  border-radius: 10px;
-  background: rgba(20, 19, 26, 0.82);
-  box-shadow: var(--shadow-soft);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
   opacity: 0;
   transition:
     opacity 160ms var(--ease),
@@ -976,9 +981,78 @@
   pointer-events: none;
 }
 
-.seekbar.is-scrubbing .seek-time {
+.seekbar.is-scrubbing .seek-preview,
+.seekbar.is-hovering .seek-preview {
   opacity: 1;
   transform: translateX(-50%) scale(1);
+}
+
+.seek-thumb {
+  position: relative;
+  width: 160px;
+  height: 90px;
+  max-width: 160px;
+  max-height: 90px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(14, 14, 18, 0.92);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  display: none;
+}
+
+.seek-thumb.is-ready {
+  display: block;
+}
+
+.seek-thumb-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.seek-thumb.is-sprite .seek-thumb-canvas {
+  display: none;
+}
+
+.seek-thumb-sprite {
+  width: 100%;
+  height: 100%;
+  display: none;
+  background-repeat: no-repeat;
+}
+
+.seek-thumb.is-sprite .seek-thumb-sprite {
+  display: block;
+}
+
+.seek-preview-chapter {
+  max-width: 180px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: rgba(20, 19, 26, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: none;
+}
+
+.seek-preview-chapter.is-visible {
+  display: block;
+}
+
+.seek-time {
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(20, 19, 26, 0.82);
+  box-shadow: var(--shadow-soft);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .skip-button svg {
@@ -1009,6 +1083,7 @@
   .step-button,
   .play-button,
   .skip-button,
+  .seek-preview,
   .seek-time {
     transition-duration: 1ms;
   }

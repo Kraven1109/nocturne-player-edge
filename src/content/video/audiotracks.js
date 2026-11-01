@@ -114,43 +114,6 @@ const buildPlayerjsTracks = (instance) => ({
   },
 });
 
-// --- The element's own list --------------------------------------------------
-
-// Where the browser exposes it, this is the plainest answer of all. Gecko does
-// not ship audioTracks on Android today, so it is the fallback rather than the
-// first thing asked.
-const buildNativeTracks = (video) => {
-  const element = video.wrappedJSObject ?? video;
-  const list = read(element, 'audioTracks');
-  if (typeof read(list, 'length') !== 'number') return null;
-
-  return {
-    name: 'element',
-    list: () =>
-      toArray(list).map((track, index) => ({
-        id: String(index),
-        label: trackLabel(read(track, 'label'), read(track, 'language'), index),
-      })),
-    current: () => {
-      const tracks = toArray(list);
-      const index = tracks.findIndex(
-        (track) => read(track, 'enabled') === true,
-      );
-      return index === -1 ? null : String(index);
-    },
-    // Exactly one enabled at a time: switching is turning the others off.
-    select: (id) => {
-      const wanted = Number(id);
-      const tracks = toArray(list);
-      if (Number.isNaN(wanted) || tracks[wanted] === undefined) return false;
-      tracks.forEach((track, index) =>
-        write(track, 'enabled', index === wanted),
-      );
-      return true;
-    },
-  };
-};
-
 const BUILDERS = [
   { kind: 'hls', build: buildHlsTracks },
   { kind: 'dash', build: buildDashTracks },
@@ -176,12 +139,6 @@ export const createAudioTracks = (video, host = null) => {
       } catch (error) {
         console.warn('Nocturne: an audio adapter threw while probing', error);
       }
-    }
-    try {
-      const native = buildNativeTracks(video);
-      if (native !== null && native.list().length > 0) return native;
-    } catch (error) {
-      console.warn('Nocturne: the element refused its audio list', error);
     }
     return null;
   };

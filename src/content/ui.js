@@ -1,8 +1,11 @@
-import { readSiteChapters } from './video/chapters.js';
+import {
+  chaptersList,
+  createBridgeAudioTracks,
+  createBridgeQualityAdapter,
+} from './page/bridge.js';
 import { createColorPanel } from './controls/colorpanel.js';
 import { createMenu } from './controls/menu.js';
 import { createPlaylistPanel } from './controls/playlistpanel.js';
-import { createAudioTracks } from './video/audiotracks.js';
 import { createPlaylist } from './video/playlist.js';
 import { createQuality } from './video/quality.js';
 import { createRecognizer } from './gestures/recognizer.js';
@@ -152,7 +155,6 @@ export const createOverlay = ({
   onExit,
   settings,
   onPersist,
-  playerHost,
   onFeedStep,
   onFullscreen,
   isChromeShown = true,
@@ -179,7 +181,7 @@ export const createOverlay = ({
     play: null,
     fullscreen: null,
   };
-  const menuRef = { setSubtitle: () => {} };
+  const menuRef = { setSubtitle: () => {}, showChrome: () => {} };
   const playlistRef = {
     refresh: () => {},
     isOpen: () => false,
@@ -191,9 +193,9 @@ export const createOverlay = ({
   video.playbackRate = 1;
 
   const visuals = createVisuals(video, stage);
-  const quality = createQuality(video, playerHost);
-  const audio = createAudioTracks(video, playerHost);
-  const playlist = createPlaylist(video, playerHost);
+  const quality = createQuality(video, null, [createBridgeQualityAdapter]);
+  const audio = createBridgeAudioTracks(video);
+  const playlist = createPlaylist(video);
   const tracks = createTrackManager(
     video,
     (text) => {
@@ -201,11 +203,12 @@ export const createOverlay = ({
       cueBox.classList.toggle('is-visible', text !== '');
     },
     (id) => menuRef.setSubtitle(id),
-    playerHost,
   );
 
-  const seek = createSeeker(video, playerHost);
-  const seekBar = createSeekBar(video, seek);
+  const seek = createSeeker(video);
+  const seekBar = createSeekBar(video, seek, {
+    onInteract: () => menuRef.showChrome(),
+  });
   const skipFeedback = createSkipFeedback();
   const introSkip = createIntroSkip(video, seek);
   const introWatch = createIntroWatch(video, {
@@ -290,6 +293,8 @@ export const createOverlay = ({
       chrome.toggleAttribute('hidden', true);
     }, CHROME_IDLE_MS);
   };
+
+  menuRef.showChrome = () => setChromeVisible(true);
 
   const closePanels = () => {
     playlistRef.close();
@@ -640,7 +645,7 @@ export const createOverlay = ({
   // that was navigated to fills its data in some time after the video starts.
   const chapterTimers = CHAPTER_TRIES_MS.map((delay) =>
     setTimeout(() => {
-      const chapters = readSiteChapters(playerHost);
+      const chapters = chaptersList(video);
       if (chapters.length > 0) seekBar.setChapters(chapters);
     }, delay),
   );

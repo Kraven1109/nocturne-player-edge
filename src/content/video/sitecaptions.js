@@ -1,4 +1,8 @@
-import { call, isFunction, read, toArray, toPage } from './pageapi.js';
+import {
+  captionsDisable,
+  captionsProbe,
+  captionsSelect,
+} from '../page/bridge.js';
 
 const PROBE_INTERVAL_MS = 1000;
 
@@ -44,67 +48,7 @@ const findContainer = () => {
   return null;
 };
 
-const findYouTubePlayer = (host) => {
-  if (host !== null && isFunction(host, 'getOption')) return host;
-  const element = document.querySelector('#movie_player, .html5-video-player');
-  if (element === null) return null;
-  const player = element.wrappedJSObject ?? element;
-  return isFunction(player, 'getOption') ? player : null;
-};
-
-// YouTube keeps its caption list behind the player API rather than in
-// video.textTracks, so the list comes from there and the text comes from the
-// mirror above. Other players expose the mirror only, which is still enough to
-// show whatever the site has switched on.
-const createYouTubeTracks = (host) => {
-  const player = findYouTubePlayer(host);
-  if (player === null) return null;
-
-  const tracklist = () => {
-    const list = toArray(call(player, 'getOption', 'captions', 'tracklist'));
-    if (list.length > 0) return list;
-    call(player, 'loadModule', 'captions');
-    return toArray(call(player, 'getOption', 'captions', 'tracklist'));
-  };
-
-  const describe = (track, index) => {
-    const name = read(track, 'displayName') ?? read(track, 'languageName');
-    if (typeof name === 'string' && name !== '') return name;
-    const code = read(track, 'languageCode');
-    const isNamed = typeof code === 'string' && code !== '';
-    return isNamed ? code : `Track ${index + 1}`;
-  };
-
-  return {
-    list: () => tracklist().map((track, index) => describe(track, index)),
-    isOn: () => {
-      const track = call(player, 'getOption', 'captions', 'track');
-      const code = read(track, 'languageCode');
-      return typeof code === 'string' && code !== '';
-    },
-    activeIndex: () => {
-      const current = call(player, 'getOption', 'captions', 'track');
-      const code = read(current, 'languageCode');
-      if (typeof code !== 'string' || code === '') return -1;
-      return tracklist().findIndex(
-        (track) => read(track, 'languageCode') === code,
-      );
-    },
-    select: (index) => {
-      const track = tracklist()[index];
-      if (track === undefined) return false;
-      call(player, 'setOption', 'captions', 'track', track);
-      return true;
-    },
-    disable: () => {
-      call(player, 'setOption', 'captions', 'track', toPage({}));
-    },
-  };
-};
-
-export const createSiteCaptions = (onText, host = null) => {
-  const youtube = createYouTubeTracks(host);
-
+export const createSiteCaptions = (onText, video = null) => {
   let container = null;
   let observer = null;
   let probeTimer = null;
@@ -157,14 +101,25 @@ export const createSiteCaptions = (onText, host = null) => {
 
   return {
     // A site source is worth offering when the site can actually produce one.
-    list: () => (youtube === null ? [] : youtube.list()),
+    list: () => {
+      const snap = captionsProbe(video);
+      return snap !== null && Array.isArray(snap.list) ? snap.list : [];
+    },
     hasContainer: () => container !== null,
-    isOn: () => (youtube === null ? container !== null : youtube.isOn()),
-    activeIndex: () => (youtube === null ? 0 : youtube.activeIndex()),
+    isOn: () => {
+      const snap = captionsProbe(video);
+      return snap !== null ? Boolean(snap.isOn) : container !== null;
+    },
+    activeIndex: () => {
+      const snap = captionsProbe(video);
+      return snap !== null && typeof snap.activeIndex === 'number'
+        ? snap.activeIndex
+        : 0;
+    },
     select: (index) => {
       isMirroring = true;
       lastText = '';
-      if (youtube !== null) youtube.select(index);
+      captionsSelect(video, index);
       readNow();
     },
     // The site's own caption layer sits behind the stage where nobody can see
@@ -172,7 +127,7 @@ export const createSiteCaptions = (onText, host = null) => {
     disable: () => {
       isMirroring = false;
       lastText = '';
-      if (youtube !== null) youtube.disable();
+      captionsDisable(video);
       onText('');
     },
     destroy: () => {

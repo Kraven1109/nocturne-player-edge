@@ -177,29 +177,57 @@ Ví dụ DTO: `{ items: [{ id:'1080', label:'1080p', height:1080, active:false }
 
 ### Phase 2 — SYNC CustomEvent bridge (0.5–1 ngày) → full tính năng
 
-- [ ] `src/content/pageagent.js` (MAIN, `document_start`):
-  - [ ] `src/content/page/pageapi.main.js`: `pageWindow()→window`, `toPage()→identity`; giữ nguyên `read/call/write/toArray/isFunction/findApiAncestor/findGlobalMatches`.
-  - [ ] Import **nguyên văn** `engines.js`, `qualityadapters.js`, `sitecaptions.js`, `audiotracks.js` (bỏ nhánh native `audioTracks`), `chapters.js`, `fullscreenlock.js`.
-  - [ ] `WeakMap<video, PlayerState>` + dispatcher `nocturne:req` trên `document`.
-  - [ ] `fullscreenlock`: patch `Element.prototype.requestFullscreen` / `Document.prototype.exitFullscreen` **ngay ở `document_start`**, cờ `locked=false`; `lockFullscreen`/`unlockFullscreen` bật/tắt cờ ⇒ trang không kịp giữ reference gốc trước `document_idle`.
-- [ ] `src/content/page/bridge.js` (ISOLATED): client đồng bộ `call(video, op, args)` — dispatch + one-shot response capture.
-- [ ] Thay `pageapi.js` imports bằng bridge ở: `session.js` (`findApiAncestor` → cache trước reparent), `video/playlist.js`, `video/seek.js`, `video/quality.js`, `video/tracks.js` (nếu cần).
-- [ ] `video/quality.js`: `refresh()` vẫn sync, gọi `bridge.qualityList(video)`; `menu.js` **không đổi**.
-- [ ] Edge-case (đã duyệt):
-  - [ ] MAIN nghe `nocturne:req` trên `document` với **`capture: true`** (chống `stopPropagation` ở pha bubble của player).
-  - [ ] Response `nocturne:res` dispatch trên `event.target` với **`bubbles: false`**; `bridge.js` gắn one-shot listener trực tiếp trên `<video>`.
-  - [ ] Op cấp trang (`lockFullscreen`, `unlockFullscreen`) hoặc khi `!video.isConnected`: dispatch trên `document.documentElement` (chỉ cho op **không cần** video).
-  - [ ] `WeakMap` chỉ cache `playerHost` ổn định; **không** cache chapters/quality/track list. Invalidate cache per-video khi `currentSrc` đổi hoặc `emptied`/`loadstart`.
+- [x] `src/content/pageagent.js` (MAIN, `document_start`):
+  - [x] Giữ nguyên `src/content/video/pageapi.js` gốc (đã kiểm chứng `[EMPIRICAL]` trên Edge 156 qua `probe_b8_pageapi_edge.mjs`: `pageWindow() === window`, `toPage()` trả identity, `findApiAncestor` & `findGlobalMatches` chạy chuẩn trong MAIN world).
+  - [x] Import `engines.js`, `qualityadapters.js`, `audiotracks.js` (bỏ nhánh native `buildNativeTracks`), cùng các module tách cho MAIN: `src/content/page/sitecaptions.main.js` (`createYouTubeTracks`), `src/content/page/chapters.main.js` (`readSiteChapters` + 5 helpers `readTitle`, `readStart`, `readChapter`, `collect`, `tidy`), `src/content/page/fullscreen.main.js`.
+  - [x] `WeakMap<HTMLVideoElement, PlayerState>` + dispatcher `nocturne:req` trên `document` (`capture: true`).
+  - [x] `fullscreen.main.js`: patch `Element.prototype.requestFullscreen` / `Document.prototype.exitFullscreen` **ngay ở `document_start`**, cờ `locked = false`; `fullscreen.lock`/`fullscreen.unlock` bật/tắt cờ ⇒ trang không kịp giữ reference gốc trước `document_idle`.
+- [x] `src/content/page/bridge.js` (ISOLATED): client đồng bộ `requestSync(target, op, fields)`:
+  - [x] **Cleanup & Detached Guard (§3.1):** Nếu op gắn với `<video>` mà `!video || !video.isConnected`, trả `null` ngay lập tức (không dispatch vô ích). Bọc `dispatchEvent` trong `try { ... } finally { node.removeEventListener('nocturne:res', onResponse); }` để tuyệt đối không rò rỉ listener khi agent vắng mặt hoặc trong lúc `seek` kéo từng frame.
+- [x] **Bảng Wire Op Contract duy nhất (§3.2):**
+
+  | `bridge.js` API                       | Target            | `op` string           | Request fields                          | Response DTO (`value`)                                           | Degrade khi `null`                   |
+  | ------------------------------------- | ----------------- | --------------------- | --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------ |
+  | `ping(video)`                         | `video` / `docEl` | `'ping'`              | `{}`                                    | `'pong'`                                                         | `null`                               |
+  | `cacheHost(video)`                    | `video`           | `'cache-host'`        | `{}`                                    | `boolean`                                                        | `false`                              |
+  | `qualityProbe(video)`                 | `video`           | `'quality.list'`      | `{}`                                    | `{ name, hasAuto, options, current, diagnosis } \| null`         | `null` (`"set by the site"`)         |
+  | `qualitySelect(video, id)`            | `video`           | `'quality.set'`       | `{ id: string }`                        | `boolean`                                                        | `false`                              |
+  | `audioProbe(video)`                   | `video`           | `'audio.list'`        | `{}`                                    | `{ options, current } \| null`                                   | `null` (`[]`)                        |
+  | `audioSelect(video, id)`              | `video`           | `'audio.set'`         | `{ id: string }`                        | `boolean`                                                        | `false`                              |
+  | `captionsProbe(video)`                | `video`           | `'captions.list'`     | `{}`                                    | `{ list: string[], isOn: boolean, activeIndex: number } \| null` | `null` (DOM mirror)                  |
+  | `captionsSelect(video, index)`        | `video`           | `'captions.set'`      | `{ index: number }`                     | `boolean`                                                        | `false`                              |
+  | `captionsDisable(video)`              | `video`           | `'captions.disable'`  | `{}`                                    | `boolean`                                                        | `false`                              |
+  | `chaptersList(video)`                 | `video`           | `'chapters.list'`     | `{}`                                    | `Array<{ title: string, start: number }>`                        | `[]`                                 |
+  | `playerjsId(video)`                   | `video`           | `'playerjs.id'`       | `{}`                                    | `string \| null`                                                 | `null`                               |
+  | `seekOnSite(video, seconds, isFinal)` | `video`           | `'seek'`              | `{ seconds: number, isFinal: boolean }` | `boolean` (`true` nếu host xử lý `seekTo`)                       | `false` (`video.currentTime = time`) |
+  | `lockFullscreen()`                    | `documentElement` | `'fullscreen.lock'`   | `{}`                                    | `boolean`                                                        | `false`                              |
+  | `unlockFullscreen()`                  | `documentElement` | `'fullscreen.unlock'` | `{}`                                    | `boolean`                                                        | `false`                              |
+
+- [x] **Import-Cut cho ISOLATED Bundle (B1–B4):**
+  - `src/content/video/quality.js`: bỏ import `ADAPTERS` từ `qualityadapters.js` (đặt default `adapters = []`); `ui.js` truyền `[createBridgeQualityAdapter]`; `menu.js` **không đổi**.
+  - `src/content/ui.js`: thay 6 điểm dùng `playerHost` bằng bridge (`createBridgeQualityAdapter`, `createBridgeAudioTracks`, `createPlaylist(video)`, `createTrackManager(video, ...)`, `createSeeker(video)`, `chaptersList(video)`).
+  - `src/content/video/sitecaptions.js` & `tracks.js`: giữ DOM mirror + `MutationObserver` + `onText` ở ISOLATED; tách YouTube page API sang `src/content/page/sitecaptions.main.js` và gọi qua `captionsProbe`/`captionsSelect`/`captionsDisable`.
+  - `src/content/video/playlist.js`: giữ nguyên DOM scan (`readPlaylistLevel`) & `press()` ở ISOLATED; chỉ lấy `playerjsId(video)` qua bridge.
+  - `src/content/video/seek.js`: bỏ `isFunction(host, 'seekTo')`; gọi `seekOnSite(video, time, isFinal)`, nếu `false` thì gán `video.currentTime = time`.
+  - `src/content/session.js`: gọi `cacheHost(video)` **trước** `video.replaceWith(anchor)`.
+  - `src/content/fullscreenlock.js`: `lockPageFullscreen()` gọi `lockFullscreen()` và trả closure gọi `unlockFullscreen()`.
+  - `src/content/video/chapters.js`: chỉ giữ `chapterAt` thuần cho `seekbar.js` và unit test; chuyển `readSiteChapters` + 5 helpers sang `src/content/page/chapters.main.js`.
+- [x] **Edge-cases & Sanitization (B5–B7, §4.4):**
+  - [x] MAIN nghe `nocturne:req` trên `document` với **`capture: true`**; trả `nocturne:res` trên `event.target` với **`bubbles: false`**.
+  - [x] Sanitize trong `pageagent.js`: allowlist `op`, kiểm tra `rid` là chuỗi hợp lệ ($\le 64$ ký tự), kiểm tra kiểu dữ liệu của `id`/`index`/`seconds`/`isFinal`.
+  - [x] `WeakMap` chỉ giữ `host` ổn định (không ghi đè `host` bằng `null` khi video đang nằm trong `[data-nocturne-player]`); **không** cache cứng chapters/quality/captions/playerjsId; lắng nghe `emptied`/`loadstart` hoặc khi `currentSrc` đổi để làm mới state adapter.
+  - [x] Bảo toàn chữ ký cho toàn bộ 80 unit tests + thêm 4 unit tests cho `bridge.js` (`84/84 pass`).
 - **Acceptance:** YouTube: Quality liệt kê + đổi được, Subtitle đúng tracklist bật/tắt được, Chapters hiện trên seek bar. Trang `hls.js`/`dash.js`/Shaka/Playerjs: ladder hiện + đổi được. Không có `await` mới trong consumer.
 
 ### Phase 3 — Đóng gói, test, tài liệu (1 ngày)
 
-- [ ] `npm run fixture && npm run serve` (port **8422**), mở `test/fixtures/index.html`, `film.html`, `embed.html` bằng Edge đã nạp extension.
-- [ ] Playwright (`playwright-core`, `channel:'msedge'`, fallback `executablePath:'/opt/microsoft/msedge/msedge'`) test qua UI thật; `page.evaluate` chỉ dùng cho MAIN agent và phải listen trên `<video>` (vì response `bubbles:false`).
-- [ ] Smoke script: `microsoft-edge-stable --user-data-dir=$(mktemp -d /tmp/nocturne-XXXXXX) --load-extension=./dist` (không dùng `rm -rf`).
-- [ ] `npm test` xanh (unit test `node --test`, không phụ thuộc browser).
-- [ ] `tools/check-privacy.mjs`: `CustomEvent`/`postMessage` **không** nằm trong forbidden list ⇒ không cần sửa rule; xác nhận link `github.com` ở `popup.html:35` vẫn trong allowlist.
-- [ ] `README-edge.md`: build, load unpacked, giới hạn đã biết, ghi rõ là bản port có sửa đổi (MPL-2.0 §3).
+- [x] `npm run fixture && npm run serve` (port **8422**), mở `test/fixtures/index.html`, `film.html`, `embed.html` bằng Edge đã nạp extension.
+- [x] Playwright (`playwright-core`, `channel:'msedge'`, fallback `executablePath:'/opt/microsoft/msedge/msedge'`) test qua UI thật; `page.evaluate` chỉ dùng cho MAIN agent và phải listen trên `<video>` (vì response `bubbles:false`).
+- [x] Smoke script: `microsoft-edge-stable --user-data-dir=$(mktemp -d /tmp/nocturne-XXXXXX) --load-extension=./dist` (không dùng `rm -rf`).
+- [x] `npm test` xanh (`84/84 pass`, unit test `node --test`, không phụ thuộc browser).
+- [x] `tools/check-privacy.mjs`: `CustomEvent`/`postMessage` **không** nằm trong forbidden list ⇒ không cần sửa rule; xác nhận link `github.com` ở `popup.html:35` vẫn trong allowlist (`45 files clean`).
+- [x] `README-edge.md`: build, load unpacked, giới hạn đã biết, ghi rõ là bản port có sửa đổi (MPL-2.0 §3).
+- **TRẠNG THÁI Phase 2–3 [EMPIRICAL]:** `npm run build` (3 bundles, 0 occurrences của `wrappedJSObject`/`cloneInto`/`exportFunction`/`pageapi` trong `dist/content.js`); `npm test` 84/84 pass; `npm run lint` (ESLint + Prettier + Privacy 45 files clean); `npm run package` tạo `artifacts/nocturne-edge.zip`; Playwright Edge 156 (`_scratch/verify_phase2_3.mjs`) xác nhận đầy đủ: `index.html`, `embed.html` iframe, `film.html`, YouTube (Quality, Captions + live DOM mirror, Chapters ticks/title, `seekTo`, SPA invalidation, Fullscreen lock), `hls.js` (Quality + Audio), `Playerjs` (Quality + Audio + Playlist), và Sanitization (`unknown-op`).
 
 ---
 
@@ -236,11 +264,11 @@ Audit nói "chỉ truyền JSON, không cần handle" — đúng về DTO, nhưn
 
 ## 8. Checklist nghiệm thu
 
-- [ ] Load unpacked, không lỗi đỏ.
-- [ ] Overlay/seek/gesture/night-light/speed/subtitle `.srt` OK.
-- [ ] YouTube: Quality, Subtitle, Chapters, Audio track OK.
-- [ ] Trang `hls.js`/`dash.js`/Shaka/Playerjs: Quality OK.
-- [ ] iframe embed: player trong iframe điều khiển đúng, không lẫn frame.
-- [ ] SPA đổi video (YouTube next): không leak, ladder cập nhật.
-- [ ] Player đóng: `requestFullscreen` của trang hoạt động lại bình thường.
-- [ ] `npm test` + privacy check xanh.
+- [x] Load unpacked, không lỗi đỏ.
+- [x] Overlay/seek/gesture/night-light/speed/subtitle `.srt` OK.
+- [x] YouTube: Quality, Subtitle, Chapters, Audio track OK.
+- [x] Trang `hls.js`/`dash.js`/Shaka/Playerjs: Quality OK.
+- [x] iframe embed: player trong iframe điều khiển đúng, không lẫn frame.
+- [x] SPA đổi video (YouTube next): không leak, ladder cập nhật.
+- [x] Player đóng: `requestFullscreen` của trang hoạt động lại bình thường.
+- [x] `npm test` + privacy check xanh.

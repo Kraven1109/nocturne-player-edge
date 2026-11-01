@@ -1,11 +1,9 @@
-import { ADAPTERS, AUTO_ID } from './qualityadapters.js';
-
-export { AUTO_ID };
+export const AUTO_ID = 'auto';
 
 // A streaming player builds its quality ladder after the first segments land,
 // so the ladder is looked up again every time the sheet is opened rather than
 // once when the session starts.
-export const createQuality = (video, host = null, adapters = ADAPTERS) => {
+export const createQuality = (video, host = null, adapters = []) => {
   let adapter = null;
   let options = [];
   // What the viewer asked for has to outlive the adapter. The ladder is looked
