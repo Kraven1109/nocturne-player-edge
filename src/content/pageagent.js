@@ -2,7 +2,7 @@ import { call, findApiAncestor, isFunction } from './video/pageapi.js';
 import { findEngines } from './video/engines.js';
 import { ADAPTERS } from './video/qualityadapters.js';
 import { createAudioTracks } from './video/audiotracks.js';
-import { readSiteChapters } from './page/chapters.main.js';
+import { readChaptersSnapshot } from './page/chapters.main.js';
 import { createYouTubeTracks } from './page/sitecaptions.main.js';
 import {
   installFullscreenLock,
@@ -37,7 +37,7 @@ const ALLOWED_OPS = new Set([
   'captions.list',
   'captions.set',
   'captions.disable',
-  'chapters.list',
+  'chapters.snapshot',
   'playerjs.id',
   'seek',
   'fullscreen.lock',
@@ -202,8 +202,8 @@ const handleVideoOp = (video, op, request) => {
     return true;
   }
 
-  if (op === 'chapters.list') {
-    return readSiteChapters(state.host);
+  if (op === 'chapters.snapshot') {
+    return readChaptersSnapshot(state.host);
   }
 
   if (op === 'playerjs.id') {

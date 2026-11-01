@@ -355,6 +355,12 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     arePlaced = true;
   };
 
+  // A different length puts every divider somewhere else.
+  const replaceMarks = () => {
+    arePlaced = false;
+    placeMarks();
+  };
+
   // Stretches of the film painted onto the track — the opening, once it has
   // been recognised — redrawn whenever the length of the film is learned.
   const placeZones = () => {
@@ -546,6 +552,7 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
   video.addEventListener('timeupdate', sync);
   video.addEventListener('durationchange', sync);
   video.addEventListener('durationchange', placeZones);
+  video.addEventListener('durationchange', replaceMarks);
   video.addEventListener('seeked', sync);
   sync();
 
@@ -561,6 +568,13 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     setChapters: (list) => {
       chapters = list;
       arePlaced = false;
+      // placeMarks and showChapter both return early on an empty list, which
+      // would leave the previous film's dividers and title on screen.
+      if (list.length === 0) {
+        marks.replaceChildren();
+        chapterLabel.textContent = '';
+        chapterLabel.classList.remove('is-visible');
+      }
       placeMarks();
       showChapter(video.currentTime);
     },
@@ -574,6 +588,7 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
       video.removeEventListener('timeupdate', sync);
       video.removeEventListener('durationchange', sync);
       video.removeEventListener('durationchange', placeZones);
+      video.removeEventListener('durationchange', replaceMarks);
       video.removeEventListener('seeked', sync);
     },
   };

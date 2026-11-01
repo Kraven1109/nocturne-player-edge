@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  chaptersSnapshot,
   createBridgeAudioTracks,
   createBridgeQualityAdapter,
   requestSync,
@@ -131,4 +132,42 @@ test('bridge quality and audio adapters expose sync contracts', () => {
   assert.equal(audio.select('1'), true);
   assert.equal(selectedAudio, '1');
   assert.equal(audio.getCurrent(), '1');
+});
+
+const answering = (value) =>
+  createMockElement({
+    onDispatch(node, event) {
+      if (event.type !== 'nocturne:req') return;
+      node.dispatchEvent(
+        new CustomEvent('nocturne:res', {
+          detail: { rid: event.detail.rid, ok: true, value },
+        }),
+      );
+    },
+  });
+
+test('chaptersSnapshot rebuilds the page answer field by field', () => {
+  const video = answering({
+    videoId: 'B',
+    isAd: true,
+    extra: 'dropped',
+    chapters: [
+      { title: 'One', start: 0, extra: 1 },
+      { title: 5, start: 10 },
+      { title: 'NaN', start: NaN },
+      null,
+    ],
+  });
+  assert.deepEqual(chaptersSnapshot(video), {
+    videoId: 'B',
+    isAd: true,
+    chapters: [{ title: 'One', start: 0 }],
+  });
+});
+
+test('chaptersSnapshot is empty when nothing usable answers', () => {
+  const empty = { videoId: null, isAd: false, chapters: [] };
+  assert.deepEqual(chaptersSnapshot(createMockElement()), empty);
+  assert.deepEqual(chaptersSnapshot(answering('nope')), empty);
+  assert.deepEqual(chaptersSnapshot(answering({ videoId: '' })), empty);
 });

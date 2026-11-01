@@ -79,7 +79,7 @@ Hệ quả trực tiếp:
 
 ### 3.2. Tập op tối thiểu (DTO phẳng)
 
-`engines`, `findPlayerHost`, `quality.list/select/current/configure`, `captions.list/select/disable/isOn`, `audio.list/select`, `chapters`, `lockFullscreen`/`unlockFullscreen`.
+`engines`, `findPlayerHost`, `quality.list/select/current/configure`, `captions.list/select/disable/isOn`, `audio.list/select`, `chapters.snapshot`, `lockFullscreen`/`unlockFullscreen`.
 
 Ví dụ DTO: `{ items: [{ id:'1080', label:'1080p', height:1080, active:false }] }`, `[{ title, start, end }]`.
 
@@ -186,26 +186,26 @@ Ví dụ DTO: `{ items: [{ id:'1080', label:'1080p', height:1080, active:false }
   - [x] **Cleanup & Detached Guard (§3.1):** Nếu op gắn với `<video>` mà `!video || !video.isConnected`, trả `null` ngay lập tức (không dispatch vô ích). Bọc `dispatchEvent` trong `try { ... } finally { node.removeEventListener('nocturne:res', onResponse); }` để tuyệt đối không rò rỉ listener khi agent vắng mặt hoặc trong lúc `seek` kéo từng frame.
 - [x] **Bảng Wire Op Contract duy nhất (§3.2):**
 
-  | `bridge.js` API                       | Target            | `op` string           | Request fields                          | Response DTO (`value`)                                           | Degrade khi `null`                   |
-  | ------------------------------------- | ----------------- | --------------------- | --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------ |
-  | `ping(video)`                         | `video` / `docEl` | `'ping'`              | `{}`                                    | `'pong'`                                                         | `null`                               |
-  | `cacheHost(video)`                    | `video`           | `'cache-host'`        | `{}`                                    | `boolean`                                                        | `false`                              |
-  | `qualityProbe(video)`                 | `video`           | `'quality.list'`      | `{}`                                    | `{ name, hasAuto, options, current, diagnosis } \| null`         | `null` (`"set by the site"`)         |
-  | `qualitySelect(video, id)`            | `video`           | `'quality.set'`       | `{ id: string }`                        | `boolean`                                                        | `false`                              |
-  | `audioProbe(video)`                   | `video`           | `'audio.list'`        | `{}`                                    | `{ options, current } \| null`                                   | `null` (`[]`)                        |
-  | `audioSelect(video, id)`              | `video`           | `'audio.set'`         | `{ id: string }`                        | `boolean`                                                        | `false`                              |
-  | `captionsProbe(video)`                | `video`           | `'captions.list'`     | `{}`                                    | `{ list: string[], isOn: boolean, activeIndex: number } \| null` | `null` (DOM mirror)                  |
-  | `captionsSelect(video, index)`        | `video`           | `'captions.set'`      | `{ index: number }`                     | `boolean`                                                        | `false`                              |
-  | `captionsDisable(video)`              | `video`           | `'captions.disable'`  | `{}`                                    | `boolean`                                                        | `false`                              |
-  | `chaptersList(video)`                 | `video`           | `'chapters.list'`     | `{}`                                    | `Array<{ title: string, start: number }>`                        | `[]`                                 |
-  | `playerjsId(video)`                   | `video`           | `'playerjs.id'`       | `{}`                                    | `string \| null`                                                 | `null`                               |
-  | `seekOnSite(video, seconds, isFinal)` | `video`           | `'seek'`              | `{ seconds: number, isFinal: boolean }` | `boolean` (`true` nếu host xử lý `seekTo`)                       | `false` (`video.currentTime = time`) |
-  | `lockFullscreen()`                    | `documentElement` | `'fullscreen.lock'`   | `{}`                                    | `boolean`                                                        | `false`                              |
-  | `unlockFullscreen()`                  | `documentElement` | `'fullscreen.unlock'` | `{}`                                    | `boolean`                                                        | `false`                              |
+  | `bridge.js` API                       | Target            | `op` string           | Request fields                          | Response DTO (`value`)                                                                          | Degrade khi `null`                             |
+  | ------------------------------------- | ----------------- | --------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+  | `ping(video)`                         | `video` / `docEl` | `'ping'`              | `{}`                                    | `'pong'`                                                                                        | `null`                                         |
+  | `cacheHost(video)`                    | `video`           | `'cache-host'`        | `{}`                                    | `boolean`                                                                                       | `false`                                        |
+  | `qualityProbe(video)`                 | `video`           | `'quality.list'`      | `{}`                                    | `{ name, hasAuto, options, current, diagnosis } \| null`                                        | `null` (`"set by the site"`)                   |
+  | `qualitySelect(video, id)`            | `video`           | `'quality.set'`       | `{ id: string }`                        | `boolean`                                                                                       | `false`                                        |
+  | `audioProbe(video)`                   | `video`           | `'audio.list'`        | `{}`                                    | `{ options, current } \| null`                                                                  | `null` (`[]`)                                  |
+  | `audioSelect(video, id)`              | `video`           | `'audio.set'`         | `{ id: string }`                        | `boolean`                                                                                       | `false`                                        |
+  | `captionsProbe(video)`                | `video`           | `'captions.list'`     | `{}`                                    | `{ list: string[], isOn: boolean, activeIndex: number } \| null`                                | `null` (DOM mirror)                            |
+  | `captionsSelect(video, index)`        | `video`           | `'captions.set'`      | `{ index: number }`                     | `boolean`                                                                                       | `false`                                        |
+  | `captionsDisable(video)`              | `video`           | `'captions.disable'`  | `{}`                                    | `boolean`                                                                                       | `false`                                        |
+  | `chaptersSnapshot(video)`             | `video`           | `'chapters.snapshot'` | `{}`                                    | `{ videoId: string \| null, isAd: boolean, chapters: Array<{ title: string, start: number }> }` | `{ videoId: null, isAd: false, chapters: [] }` |
+  | `playerjsId(video)`                   | `video`           | `'playerjs.id'`       | `{}`                                    | `string \| null`                                                                                | `null`                                         |
+  | `seekOnSite(video, seconds, isFinal)` | `video`           | `'seek'`              | `{ seconds: number, isFinal: boolean }` | `boolean` (`true` nếu host xử lý `seekTo`)                                                      | `false` (`video.currentTime = time`)           |
+  | `lockFullscreen()`                    | `documentElement` | `'fullscreen.lock'`   | `{}`                                    | `boolean`                                                                                       | `false`                                        |
+  | `unlockFullscreen()`                  | `documentElement` | `'fullscreen.unlock'` | `{}`                                    | `boolean`                                                                                       | `false`                                        |
 
 - [x] **Import-Cut cho ISOLATED Bundle (B1–B4):**
   - `src/content/video/quality.js`: bỏ import `ADAPTERS` từ `qualityadapters.js` (đặt default `adapters = []`); `ui.js` truyền `[createBridgeQualityAdapter]`; `menu.js` **không đổi**.
-  - `src/content/ui.js`: thay 6 điểm dùng `playerHost` bằng bridge (`createBridgeQualityAdapter`, `createBridgeAudioTracks`, `createPlaylist(video)`, `createTrackManager(video, ...)`, `createSeeker(video)`, `chaptersList(video)`).
+  - `src/content/ui.js`: thay 6 điểm dùng `playerHost` bằng bridge (`createBridgeQualityAdapter`, `createBridgeAudioTracks`, `createPlaylist(video)`, `createTrackManager(video, ...)`, `createSeeker(video)`, `chaptersSnapshot(video)`).
   - `src/content/video/sitecaptions.js` & `tracks.js`: giữ DOM mirror + `MutationObserver` + `onText` ở ISOLATED; tách YouTube page API sang `src/content/page/sitecaptions.main.js` và gọi qua `captionsProbe`/`captionsSelect`/`captionsDisable`.
   - `src/content/video/playlist.js`: giữ nguyên DOM scan (`readPlaylistLevel`) & `press()` ở ISOLATED; chỉ lấy `playerjsId(video)` qua bridge.
   - `src/content/video/seek.js`: bỏ `isFunction(host, 'seekTo')`; gọi `seekOnSite(video, time, isFinal)`, nếu `false` thì gán `video.currentTime = time`.

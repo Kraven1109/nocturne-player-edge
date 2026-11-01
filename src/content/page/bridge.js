@@ -70,9 +70,34 @@ export const captionsSelect = (video, index) =>
 export const captionsDisable = (video) =>
   requestSync(video, 'captions.disable') === true;
 
-export const chaptersList = (video) => {
-  const list = requestSync(video, 'chapters.list');
-  return Array.isArray(list) ? list : [];
+const EMPTY_CHAPTERS = { videoId: null, isAd: false, chapters: [] };
+
+// Everything crossing from the page's world is data the page could have
+// shaped, so it is rebuilt field by field rather than passed on.
+export const chaptersSnapshot = (video) => {
+  const snap = requestSync(video, 'chapters.snapshot');
+  if (snap === null || typeof snap !== 'object') return EMPTY_CHAPTERS;
+
+  const chapters = Array.isArray(snap.chapters)
+    ? snap.chapters
+        .filter(
+          (chapter) =>
+            chapter !== null &&
+            typeof chapter === 'object' &&
+            typeof chapter.title === 'string' &&
+            Number.isFinite(chapter.start),
+        )
+        .map((chapter) => ({ title: chapter.title, start: chapter.start }))
+    : [];
+
+  return {
+    videoId:
+      typeof snap.videoId === 'string' && snap.videoId !== ''
+        ? snap.videoId
+        : null,
+    isAd: snap.isAd === true,
+    chapters,
+  };
 };
 
 export const playerjsId = (video) => {

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+### Fixed
+
+- Chapters now follow the site's next video under an open player: the
+  previous video's chapters are cleared and never reused, a source change
+  inside the same video (quality, advertisement) no longer makes them blink,
+  and none are drawn over an advertisement.
+
 ## [0.9.1][] - 2026-10-20
 
 ### Changed

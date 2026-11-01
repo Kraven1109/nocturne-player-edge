@@ -105,21 +105,74 @@ const tidy = (chapters) => {
   return sorted.length >= MIN_CHAPTERS ? sorted : [];
 };
 
-// The player's own answer comes first: it is the only source that is certainly
-// about the video playing right now, rather than about whatever page happened
-// to be loaded before the viewer clicked through to this one.
-export const readSiteChapters = (playerHost = null) => {
+// Both blobs name the video they describe, in a different place each.
+const readVideoId = (data) => {
+  const endpoint = read(read(data, 'currentVideoEndpoint'), 'watchEndpoint');
+  const id =
+    read(endpoint, 'videoId') ?? read(read(data, 'videoDetails'), 'videoId');
+  return typeof id === 'string' && id !== '' ? id : null;
+};
+
+const readLocationVideoId = () => {
+  if (typeof location === 'undefined') return null;
+  try {
+    return new URL(location.href).searchParams.get('v') || null;
+  } catch {
+    return null;
+  }
+};
+
+// Three places name the video that is playing; the player's own are tried
+// first, the address bar last because it is the same on every site.
+const readLiveId = (playerHost, playerResponse) => {
+  const fromPlayer = read(call(playerHost, 'getVideoData'), 'video_id');
+  return (
+    readVideoId(playerResponse) ??
+    (typeof fromPlayer === 'string' && fromPlayer !== '' ? fromPlayer : null) ??
+    readLocationVideoId()
+  );
+};
+
+// An advertisement plays in the same element with the film's own id, and its
+// length is not the film's, so chapters drawn over it would sit in the wrong
+// places.
+const isAdShowing = (playerHost) =>
+  call(read(playerHost, 'classList'), 'contains', 'ad-showing') === true;
+
+// The player's own answer is the only one certainly about the video playing
+// right now, but on YouTube it carries no chapters: those ride in the page's
+// watch data. That data is live in <ytd-watch-flexy> after a navigation, while
+// the ytInitial* globals stay frozen at whatever page was loaded first — so a
+// blob is only trusted when it names the video that is playing. One that names
+// nothing is read as before, so a layout we have not seen does not lose
+// chapters.
+export const readChaptersSnapshot = (playerHost = null) => {
+  const playerResponse = call(playerHost, 'getPlayerResponse');
+  const videoId = readLiveId(playerHost, playerResponse);
+  const isAd = isAdShowing(playerHost);
+  if (isAd) return { videoId, isAd, chapters: [] };
+
   const scope = pageWindow();
+  const flexy =
+    typeof document === 'undefined'
+      ? null
+      : document.querySelector('ytd-watch-flexy');
   const sources = [
-    call(playerHost, 'getPlayerResponse'),
+    playerResponse,
+    read(flexy, 'data'),
     read(scope, 'ytInitialData'),
     read(scope, 'ytInitialPlayerResponse'),
   ];
 
   for (const source of sources) {
     if (source === null) continue;
+    const id = readVideoId(source);
+    if (videoId !== null && id !== null && id !== videoId) continue;
     const chapters = tidy(collect(source));
-    if (chapters.length > 0) return chapters;
+    if (chapters.length > 0) return { videoId, isAd, chapters };
   }
-  return [];
+  return { videoId, isAd, chapters: [] };
 };
+
+export const readSiteChapters = (playerHost = null) =>
+  readChaptersSnapshot(playerHost).chapters;

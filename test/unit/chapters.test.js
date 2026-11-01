@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { chapterAt } from '../../src/content/video/chapters.js';
+import {
+  readChaptersSnapshot,
+  readSiteChapters,
+} from '../../src/content/page/chapters.main.js';
 
 const CHAPTERS = [
   { title: 'Intro', start: 0 },
@@ -19,4 +23,132 @@ test('the chapter is the last one that has started', () => {
 test('a time before the first chapter has no chapter', () => {
   assert.equal(chapterAt([{ title: 'Later', start: 30 }], 10), null);
   assert.equal(chapterAt([], 10), null);
+});
+
+const markers = (...titles) =>
+  titles.map((title, index) => ({
+    chapterRenderer: {
+      title: { simpleText: title },
+      timeRangeStartMillis: index * 30000,
+    },
+  }));
+
+const watchData = (videoId, ...titles) => ({
+  currentVideoEndpoint: { watchEndpoint: { videoId } },
+  playerOverlays: { markers: markers(...titles) },
+});
+
+// getPlayerResponse() on YouTube names the video but carries no chapters.
+const hostPlaying = (videoId) => ({
+  getPlayerResponse: () => ({ videoDetails: { videoId } }),
+});
+
+const withPage = ({ initialData, flexyData, href }, run) => {
+  const saved = {
+    window: globalThis.window,
+    document: globalThis.document,
+    ytInitialData: globalThis.ytInitialData,
+    location: globalThis.location,
+  };
+  globalThis.window = globalThis;
+  globalThis.document = {
+    querySelector: (selector) =>
+      selector === 'ytd-watch-flexy' && flexyData !== undefined
+        ? { data: flexyData }
+        : null,
+  };
+  globalThis.ytInitialData = initialData;
+  if (href !== undefined) globalThis.location = { href };
+  try {
+    run();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
+  }
+};
+
+test('chapters come from page data when the player response has none', () => {
+  withPage({ initialData: watchData('B', 'One', 'Two') }, () => {
+    const list = readSiteChapters(hostPlaying('B'));
+    assert.deepEqual(
+      list.map((chapter) => [chapter.title, chapter.start]),
+      [
+        ['One', 0],
+        ['Two', 30],
+      ],
+    );
+  });
+});
+
+test('page data frozen on an earlier video is not trusted', () => {
+  withPage({ initialData: watchData('A', 'Old 1', 'Old 2') }, () => {
+    assert.deepEqual(readSiteChapters(hostPlaying('B')), []);
+  });
+});
+
+test('the live watch data wins over a stale initial blob', () => {
+  withPage(
+    {
+      initialData: watchData('A', 'Old 1', 'Old 2'),
+      flexyData: watchData('B', 'New 1', 'New 2'),
+    },
+    () => {
+      const list = readSiteChapters(hostPlaying('B'));
+      assert.deepEqual(
+        list.map((chapter) => chapter.title),
+        ['New 1', 'New 2'],
+      );
+    },
+  );
+});
+
+test('a blob that names no video is still read', () => {
+  const unnamed = { playerOverlays: { markers: markers('One', 'Two') } };
+  withPage({ initialData: unnamed }, () => {
+    assert.equal(readSiteChapters(hostPlaying('B')).length, 2);
+    assert.equal(readSiteChapters(null).length, 2);
+  });
+});
+
+test('the id comes from getVideoData when the response names none', () => {
+  const host = {
+    getPlayerResponse: () => ({}),
+    // eslint-disable-next-line camelcase
+    getVideoData: () => ({ video_id: 'B' }),
+  };
+  withPage({ initialData: watchData('A', 'Old 1', 'Old 2') }, () => {
+    assert.deepEqual(readChaptersSnapshot(host).chapters, []);
+    assert.equal(readChaptersSnapshot(host).videoId, 'B');
+  });
+  withPage({ initialData: watchData('B', 'One', 'Two') }, () => {
+    assert.equal(readChaptersSnapshot(host).chapters.length, 2);
+  });
+});
+
+test('the id comes from the address when the player names none', () => {
+  const href = 'https://www.youtube.com/watch?v=B&t=5';
+  withPage({ initialData: watchData('A', 'Old 1', 'Old 2'), href }, () => {
+    const snap = readChaptersSnapshot(null);
+    assert.equal(snap.videoId, 'B');
+    assert.deepEqual(snap.chapters, []);
+  });
+  withPage({ initialData: watchData('B', 'One', 'Two'), href }, () => {
+    assert.equal(readChaptersSnapshot(null).chapters.length, 2);
+  });
+});
+
+test('no chapters are offered while an advertisement is showing', () => {
+  const host = {
+    ...hostPlaying('B'),
+    classList: { contains: (name) => name === 'ad-showing' },
+  };
+  withPage({ initialData: watchData('B', 'One', 'Two') }, () => {
+    assert.deepEqual(readChaptersSnapshot(host), {
+      videoId: 'B',
+      isAd: true,
+      chapters: [],
+    });
+  });
 });

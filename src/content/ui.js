@@ -1,5 +1,5 @@
 import {
-  chaptersList,
+  chaptersSnapshot,
   createBridgeAudioTracks,
   createBridgeQualityAdapter,
 } from './page/bridge.js';
@@ -643,12 +643,59 @@ export const createOverlay = ({
   // Walking the site's page data is not free, so it happens after the picture
   // is up rather than in the way of it — and more than once, because a page
   // that was navigated to fills its data in some time after the video starts.
-  const chapterTimers = CHAPTER_TRIES_MS.map((delay) =>
-    setTimeout(() => {
-      const chapters = chaptersList(video);
-      if (chapters.length > 0) seekBar.setChapters(chapters);
-    }, delay),
-  );
+  let chapterTimers = [];
+  let chapterVideoId = null;
+  let shownChapters = [];
+  const chaptersByVideo = new Map();
+
+  const clearChapterTimers = () => {
+    for (const timer of chapterTimers) clearTimeout(timer);
+    chapterTimers = [];
+  };
+
+  const showChapters = (chapters) => {
+    shownChapters = chapters;
+    seekBar.setChapters(chapters);
+  };
+
+  const areSameChapters = (first, second) =>
+    first.length === second.length &&
+    first.every(
+      (chapter, index) =>
+        chapter.title === second[index].title &&
+        chapter.start === second[index].start,
+    );
+
+  // The site's next video arrives in this same element, so what is on the bar
+  // is tied to the id of the video it was read for, not to the element or its
+  // source: a source changes for an advertisement or a quality switch too, and
+  // the chapters of a film that is still the same film must not blink.
+  const scanChapters = () => {
+    const { videoId, isAd, chapters } = chaptersSnapshot(video);
+    if (videoId !== null && videoId !== chapterVideoId) {
+      chapterVideoId = videoId;
+      showChapters(chaptersByVideo.get(videoId) ?? []);
+    }
+    if (isAd || chapters.length === 0) return;
+    if (videoId !== null) chaptersByVideo.set(videoId, chapters);
+    if (!areSameChapters(chapters, shownChapters)) showChapters(chapters);
+  };
+
+  const armChapterScan = (delays = CHAPTER_TRIES_MS) => {
+    clearChapterTimers();
+    chapterTimers = delays.map((delay) => setTimeout(scanChapters, delay));
+  };
+
+  // A new source is a moment the id may already have changed, so the first
+  // look is at once and the chapters of the film that has just ended come off
+  // the bar without waiting for the page's data to catch up.
+  const handleSourceEvent = () => armChapterScan([0, ...CHAPTER_TRIES_MS]);
+
+  // The page fills its data in after the element reports the new source, so
+  // the answer is asked for again on a delay rather than on the event alone.
+  video.addEventListener('loadedmetadata', handleSourceEvent);
+  video.addEventListener('durationchange', handleSourceEvent);
+  armChapterScan();
 
   restoreSettings();
   // Kept as a list so the overlay can take itself off the screen again: the
@@ -683,7 +730,9 @@ export const createOverlay = ({
       stopHold();
       if (chromeTimer !== null) clearTimeout(chromeTimer);
       if (toastTimer !== null) clearTimeout(toastTimer);
-      for (const timer of chapterTimers) clearTimeout(timer);
+      clearChapterTimers();
+      video.removeEventListener('loadedmetadata', handleSourceEvent);
+      video.removeEventListener('durationchange', handleSourceEvent);
       video.removeEventListener('pause', handlePlaybackChange);
       video.removeEventListener('play', handlePlaybackChange);
     },
