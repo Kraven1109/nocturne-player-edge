@@ -25,7 +25,8 @@
     "lint": "eslint . && prettier --check \"**/*.{js,mjs,json,md,css,html}\" && npm run lint:privacy",
     "lint:privacy": "node tools/check-privacy.mjs",
     "fix": "eslint . --fix && prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
-    "test": "node --test",
+    "test": "node --test test/unit",
+    "test:e2e": "node test/e2e/chapters-spa.mjs",
     "fixture": "node tools/make-fixture.mjs",
     "serve": "node tools/serve.mjs",
     "prepare": "husky"

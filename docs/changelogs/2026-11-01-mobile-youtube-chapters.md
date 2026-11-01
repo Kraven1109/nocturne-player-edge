@@ -18,7 +18,7 @@ The live watch data that `readChaptersSnapshot` reads after an SPA navigation li
 
 - `npm test` (99), `npm run lint`, `npm run build`.
 - Unit: chapters read from `<ytm-watch>` ahead of a stale `ytInitialData`; a phone video without chapters inherits none. The test double matches a selector list by tag name.
-- `_scratch/verify_chapters_spa_e2e.mjs --mobile` (Edge, `m.youtube.com`, Pixel 7 emulation, Nocturne open):
+- `test/e2e/chapters-spa.mjs --mobile` (Edge, `m.youtube.com`, Pixel 7 emulation, Nocturne open):
   - with the change: 11 dividers on load, cleared on navigation, 4 dividers of the next video once its pre-roll ad ended;
   - control, same script on the previous commit: **0** dividers of the next video after 90 s.
 

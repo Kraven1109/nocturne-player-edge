@@ -55,6 +55,11 @@ npm run build
 # Run unit tests (Node test runner)
 npm test
 
+# Run E2E tests with Playwright & system Edge
+npm run test:e2e            # Local fixtures with YouTube data shapes
+npm run test:e2e -- --live   # Real youtube.com (desktop)
+npm run test:e2e -- --mobile # Real m.youtube.com (Pixel 7 emulation)
+
 # Run ESLint, Prettier, and privacy audit
 npm run lint
 
