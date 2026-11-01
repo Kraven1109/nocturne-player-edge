@@ -113,6 +113,8 @@ const readVideoId = (data) => {
   return typeof id === 'string' && id !== '' ? id : null;
 };
 
+const WATCH_ELEMENTS = 'ytd-watch-flexy, ytm-watch';
+
 const readLocationVideoId = () => {
   if (typeof location === 'undefined') return null;
   try {
@@ -141,7 +143,8 @@ const isAdShowing = (playerHost) =>
 
 // The player's own answer is the only one certainly about the video playing
 // right now, but on YouTube it carries no chapters: those ride in the page's
-// watch data. That data is live in <ytd-watch-flexy> after a navigation, while
+// watch data. That data is live in <ytd-watch-flexy> (<ytm-watch> on the phone
+// site) after a navigation, while
 // the ytInitial* globals stay frozen at whatever page was loaded first — so a
 // blob is only trusted when it names the video that is playing. One that names
 // nothing is read as before, so a layout we have not seen does not lose
@@ -153,13 +156,13 @@ export const readChaptersSnapshot = (playerHost = null) => {
   if (isAd) return { videoId, isAd, chapters: [] };
 
   const scope = pageWindow();
-  const flexy =
+  const watchElement =
     typeof document === 'undefined'
       ? null
-      : document.querySelector('ytd-watch-flexy');
+      : document.querySelector(WATCH_ELEMENTS);
   const sources = [
     playerResponse,
-    read(flexy, 'data'),
+    read(watchElement, 'data'),
     read(scope, 'ytInitialData'),
     read(scope, 'ytInitialPlayerResponse'),
   ];

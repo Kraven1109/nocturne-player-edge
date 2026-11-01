@@ -16,7 +16,7 @@ In accordance with Section 3.3 of the [Mozilla Public License 2.0](LICENSE), the
   - `src/icons/icon-{16,32,48,128}.png` — Rasterized PNG icons required by Chromium MV3.
   - `src/content/pageagent.js` — `MAIN`-world agent holding a `WeakMap<HTMLVideoElement, PlayerState>` and a capture-phase `nocturne:req` dispatcher.
   - `src/content/page/bridge.js` — Synchronous `CustomEvent` bridge client (`nocturne:req` / `nocturne:res`) for the `ISOLATED` content script world.
-  - `src/content/page/chapters.main.js` — `MAIN`-world YouTube chapter extractor (`readChaptersSnapshot`): answers with the playing video's id, whether an advertisement is showing, and its chapters. Chapters follow the site's Next / autoplay under an open player (joined by video id, not by `<video>` source), are cleared for a video without chapters, and are held back while an ad plays.
+  - `src/content/page/chapters.main.js` — `MAIN`-world YouTube chapter extractor (`readChaptersSnapshot`): answers with the playing video's id, whether an advertisement is showing, and its chapters. Chapters follow the site's Next / autoplay under an open player on desktop and mobile YouTube (`ytd-watch-flexy` / `ytm-watch`) (joined by video id, not by `<video>` source), are cleared for a video without chapters, and are held back while an ad plays.
   - `src/content/page/sitecaptions.main.js` — `MAIN`-world YouTube caption tracklist controller (`createYouTubeTracks`).
   - `src/content/page/fullscreen.main.js` — Early `document_start` `Proxy` guard on `Element.prototype.requestFullscreen` and `Document.prototype.exitFullscreen`.
 - **Modified:**

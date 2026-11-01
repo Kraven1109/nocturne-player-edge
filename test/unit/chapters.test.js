@@ -43,7 +43,7 @@ const hostPlaying = (videoId) => ({
   getPlayerResponse: () => ({ videoDetails: { videoId } }),
 });
 
-const withPage = ({ initialData, flexyData, href }, run) => {
+const withPage = ({ initialData, flexyData, mobileData, href }, run) => {
   const saved = {
     window: globalThis.window,
     document: globalThis.document,
@@ -52,10 +52,17 @@ const withPage = ({ initialData, flexyData, href }, run) => {
   };
   globalThis.window = globalThis;
   globalThis.document = {
-    querySelector: (selector) =>
-      selector === 'ytd-watch-flexy' && flexyData !== undefined
-        ? { data: flexyData }
-        : null,
+    // Matches by tag name over a selector list, as the real thing would.
+    querySelector: (selector) => {
+      const tags = selector.split(',').map((tag) => tag.trim());
+      if (tags.includes('ytd-watch-flexy') && flexyData !== undefined) {
+        return { data: flexyData };
+      }
+      if (tags.includes('ytm-watch') && mobileData !== undefined) {
+        return { data: mobileData };
+      }
+      return null;
+    },
   };
   globalThis.ytInitialData = initialData;
   if (href !== undefined) globalThis.location = { href };
@@ -151,4 +158,32 @@ test('no chapters are offered while an advertisement is showing', () => {
       chapters: [],
     });
   });
+});
+
+test('the phone site reads its live watch data from <ytm-watch>', () => {
+  withPage(
+    {
+      initialData: watchData('A', 'Old 1', 'Old 2'),
+      mobileData: watchData('B', 'New 1', 'New 2'),
+    },
+    () => {
+      const list = readSiteChapters(hostPlaying('B'));
+      assert.deepEqual(
+        list.map((chapter) => chapter.title),
+        ['New 1', 'New 2'],
+      );
+    },
+  );
+});
+
+test('the phone site inherits nothing when the live data has none', () => {
+  withPage(
+    {
+      initialData: watchData('A', 'Old 1', 'Old 2'),
+      mobileData: watchData('B'),
+    },
+    () => {
+      assert.deepEqual(readSiteChapters(hostPlaying('B')), []);
+    },
+  );
 });

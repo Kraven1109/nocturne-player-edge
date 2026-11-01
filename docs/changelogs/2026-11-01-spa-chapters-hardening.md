@@ -34,4 +34,4 @@
 - `getBoundingClientRect` caching (P3): the benchmark measured the call in isolation; the real argument is that Chromium aligns `pointermove` to frames. No change.
 - `rid` randomisation (P1) and `anchor.closest()` (P4): rejected in audit, see `docs/plans/2026-11-01-post-audit-hardening.md`.
 - Mid-roll ads: chapters already on the bar stay while an ad plays.
-- `m.youtube.com`: no `ytd-watch-flexy` probe yet; without it the earlier sources are used as before.
+- `m.youtube.com`: handled afterwards, see `2026-11-01-mobile-youtube-chapters.md`.
