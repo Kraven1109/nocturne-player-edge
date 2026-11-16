@@ -277,3 +277,51 @@ test('pan preserves H1 idempotency and H2 lock + pinch emits midpoint', () => {
   assert.equal(Math.round(moves[0].dx + moves[1].dx), 0);
   mock.timers.reset();
 });
+
+test('pinch bounce and pointercancel stay abandoned until reset', () => {
+  const { events, surface } = setUp({ canPan: () => true });
+  surface.fire('pointerdown', 0.4, 0.5, 1);
+  surface.fire('pointerdown', 0.6, 0.5, 2);
+  surface.fire('pointerup', 0.6, 0.5, 2);
+  // Stray finger bounce while the first finger is still held must not
+  // restart a new pinch mid-release.
+  surface.fire('pointerdown', 0.62, 0.5, 3);
+  surface.fire('pointermove', 0.75, 0.5, 3);
+  surface.fire('pointerup', 0.62, 0.5, 3);
+  surface.fire('pointerup', 0.4, 0.5, 1);
+  mock.timers.runAll();
+
+  assert.equal(events.filter((e) => e.name === 'pinchStart').length, 1);
+  assert.equal(events.filter((e) => e.name === 'pinchMove').length, 0);
+  assert.equal(events.filter((e) => e.name === 'pinchEnd').length, 1);
+  assert.equal(events.filter((e) => e.name === 'tap').length, 0);
+
+  // Cancel path clears PINCH into ABANDONED cleanly with a single pinchEnd.
+  surface.fire('pointerdown', 0.4, 0.5, 4);
+  surface.fire('pointerdown', 0.6, 0.5, 5);
+  surface.fire('pointercancel', 0.6, 0.5, 5);
+  surface.fire('pointermove', 0.5, 0.5, 4);
+  surface.fire('pointerup', 0.5, 0.5, 4);
+  mock.timers.runAll();
+
+  assert.equal(events.filter((e) => e.name === 'pinchStart').length, 2);
+  assert.equal(events.filter((e) => e.name === 'pinchEnd').length, 2);
+  assert.equal(events.filter((e) => e.name === 'tap').length, 0);
+  mock.timers.reset();
+});
+
+test('pinch keeps original pair IDs and ignores capture throw', () => {
+  const { events, surface } = setUp();
+  surface.setPointerCapture = () => {
+    throw new DOMException('detached', 'NotFoundError');
+  };
+  surface.fire('pointerdown', 0.4, 0.5, 10);
+  surface.fire('pointerdown', 0.6, 0.5, 11);
+  surface.fire('pointerdown', 0.9, 0.9, 12);
+  surface.fire('pointermove', 0.3, 0.5, 10);
+  const moves = events.filter((e) => e.name === 'pinchMove');
+  assert.equal(moves.length, 1);
+  // Distance went from 0.2*WIDTH to 0.3*WIDTH between pointers 10 & 11.
+  assert.equal(Math.round(moves[0].scale * 10) / 10, 1.5);
+  mock.timers.reset();
+});

@@ -118,13 +118,25 @@ const VIDEO_STYLE = {
   'transform-origin': 'center center',
 };
 
-// The crop and the colour are written by the visuals rather than pinned from
-// the table above, but they are watched all the same: a site that rewrites the
-// video's style wipes them, and the guard has to notice that it did.
-const VIDEO_STYLE_KEYS = Object.keys(VIDEO_STYLE).concat([
-  'transform',
-  'filter',
-]);
+// Layout keys are pinned from VIDEO_STYLE; transform and filter are written by
+// visuals and checked against visuals.getExpectedStyle() in pin() so pinching
+// never triggers a self-repin loop.
+const VIDEO_STYLE_KEYS = Object.keys(VIDEO_STYLE);
+
+const STAGE_BUBBLE_EVENTS = [
+  'touchstart',
+  'touchmove',
+  'touchend',
+  'touchcancel',
+  'pointerdown',
+  'pointermove',
+  'pointerup',
+  'pointercancel',
+];
+
+const stopStageBubble = (event) => {
+  event.stopPropagation();
+};
 
 export const captureVideoState = (video) => ({
   cssText: video.style.cssText,
@@ -179,6 +191,15 @@ const readStyle = (video) => {
 const isSameStyle = (first, second) => {
   if (first === null) return false;
   return VIDEO_STYLE_KEYS.every((name) => first[name] === second[name]);
+};
+
+const isVisualStyleIntact = (video, overlay) => {
+  if (!overlay) return true;
+  const { transform, filter } = overlay.getExpectedStyle();
+  return (
+    video.style.getPropertyValue('transform') === transform &&
+    video.style.getPropertyValue('filter') === filter
+  );
 };
 
 // Request immersive fullscreen on Chromium/Edge Android while keeping default
@@ -450,7 +471,12 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     // After the budget runs out the guard steps aside and the picture is
     // re-fitted on the ordinary relayout events instead.
     const pin = () => {
-      if (isSameStyle(pinnedStyle, readStyle(video))) return;
+      if (
+        isSameStyle(pinnedStyle, readStyle(video)) &&
+        isVisualStyleIntact(video, overlay)
+      ) {
+        return;
+      }
 
       repinCount += 1;
       if (repinCount > MAX_REPINS) {
@@ -633,6 +659,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     stageStyle.dataset.nocturneStageStyle = '';
     stageStyle.textContent = STAGE_CSS;
     stage.append(stageStyle, ui.host);
+    for (const name of STAGE_BUBBLE_EVENTS) {
+      const options = name.startsWith('touch') ? { passive: true } : undefined;
+      scope.listen(stage, name, stopStageBubble, options);
+    }
     ui.shadow.append(layers.warm, layers.dim, loader);
     document.body.append(stage);
   };
@@ -687,9 +717,9 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       }, RECOVER_DELAY_MS);
     });
 
-    scope.listen(window, 'resize', startStabilizeRelayout);
+    scope.listen(window, 'resize', scheduleRelayout);
     if (window.visualViewport) {
-      scope.listen(window.visualViewport, 'resize', startStabilizeRelayout);
+      scope.listen(window.visualViewport, 'resize', scheduleRelayout);
     }
     scope.listen(window, 'orientationchange', noteTurn);
     if (window.screen.orientation) {

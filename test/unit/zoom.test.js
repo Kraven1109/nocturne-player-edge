@@ -130,3 +130,37 @@ test('portrait letterbox locks Y and rotation reclamps zoom [N2, N4]', () => {
   visuals.rotateQuarter();
   assert.equal(visuals.getScale(), 4);
 });
+
+test('visuals keeps free pinch scale and anchors from origin', () => {
+  const props = new Map();
+  const stage = { getBoundingClientRect: () => ({ width: 800, height: 450 }) };
+  const video = {
+    videoWidth: 1920,
+    videoHeight: 1080,
+    style: {
+      setProperty: (k, v) => props.set(k, v),
+      getPropertyValue: (k) => props.get(k) ?? '',
+    },
+  };
+  const visuals = createVisuals(video, stage);
+
+  // Near 1.12x where snapPinchScale would snap to cover=1, free zoom holds.
+  visuals.beginPinch({ focalX: 100, focalY: 50 });
+  visuals.pinchTo(1.5, { focalX: 100, focalY: 50 });
+  const at15 = visuals.getExpectedStyle().transform;
+  assert.equal(at15, 'translate(-50px, -25px) scale(1.5)');
+  visuals.pinchTo(2, { focalX: 120, focalY: 60 });
+  visuals.pinchTo(1.5, { focalX: 100, focalY: 50 });
+  assert.equal(visuals.getExpectedStyle().transform, at15);
+  close(visuals.endPinch(), 1.5);
+
+  // Just above MIN_SCALE (1.12) must remain 1.12 on release; <= 1.03 resets.
+  visuals.beginPinch({ focalX: 0, focalY: 0 });
+  visuals.pinchTo(1.12, { focalX: 0, focalY: 0 });
+  close(visuals.endPinch(), 1.12);
+
+  visuals.beginPinch({ focalX: 0, focalY: 0 });
+  visuals.pinchTo(1.02, { focalX: 0, focalY: 0 });
+  assert.equal(visuals.endPinch(), 1);
+  assert.equal(visuals.getExpectedStyle().transform, 'none');
+});

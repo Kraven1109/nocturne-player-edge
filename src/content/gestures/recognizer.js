@@ -58,6 +58,7 @@ export const createRecognizer = (
   let tapZone = ZONE.DEAD;
   let pinchStartDistance = 0;
   let pinchLastMid = { x: 0, y: 0 };
+  let pinchIds = null;
   let isEnabled = true;
 
   const emit = (name, detail) => {
@@ -124,13 +125,24 @@ export const createRecognizer = (
     tapTimer = setTimeout(flushTaps, MULTI_TAP_WINDOW_MS);
   };
 
+  const capturePointer = (pointerId) => {
+    try {
+      surface.setPointerCapture(pointerId);
+    } catch {
+      // Synthetic events or detached elements cannot capture pointers.
+    }
+  };
+
   const startPinch = () => {
     clearHoldTimer();
     const prevMode = mode;
     const prevAxis = dragAxis;
-    const points = Array.from(pointers.values());
-    const mid = midpointOf(points[0], points[1]);
-    pinchStartDistance = distanceBetween(points[0], points[1]);
+    const ids = Array.from(pointers.keys());
+    pinchIds = [ids[0], ids[1]];
+    const first = pointers.get(pinchIds[0]);
+    const second = pointers.get(pinchIds[1]);
+    const mid = midpointOf(first, second);
+    pinchStartDistance = Math.max(12, distanceBetween(first, second));
     pinchLastMid = mid;
     mode = MODE.PINCH;
     dragAxis = 'horizontal';
@@ -148,9 +160,10 @@ export const createRecognizer = (
 
   const handleDown = (event) => {
     if (!isEnabled) return;
-    surface.setPointerCapture(event.pointerId);
+    capturePointer(event.pointerId);
     const point = localPoint(event);
     pointers.set(event.pointerId, point);
+    if (mode === MODE.ABANDONED) return;
 
     if (pointers.size === 2) {
       startPinch();
@@ -174,11 +187,21 @@ export const createRecognizer = (
     }, HOLD_DELAY_MS);
   };
 
-  const handlePinchMove = () => {
+  const readPinchPair = () => {
+    if (pinchIds) {
+      const first = pointers.get(pinchIds[0]);
+      const second = pointers.get(pinchIds[1]);
+      if (first && second) return [first, second];
+    }
     const points = Array.from(pointers.values());
-    if (points.length < 2) return;
-    const spread = distanceBetween(points[0], points[1]);
-    const mid = midpointOf(points[0], points[1]);
+    return points.length >= 2 ? [points[0], points[1]] : null;
+  };
+
+  const handlePinchMove = () => {
+    const pair = readPinchPair();
+    if (!pair) return;
+    const spread = distanceBetween(pair[0], pair[1]);
+    const mid = midpointOf(pair[0], pair[1]);
     const dx = mid.x - pinchLastMid.x;
     const dy = mid.y - pinchLastMid.y;
     pinchLastMid = mid;
@@ -269,6 +292,7 @@ export const createRecognizer = (
 
     if (mode === MODE.PINCH) {
       if (pointers.size >= 2) return;
+      pinchIds = null;
       mode = pointers.size === 0 ? MODE.IDLE : MODE.ABANDONED;
       emit('pinchEnd', {});
       return;
@@ -305,7 +329,11 @@ export const createRecognizer = (
       emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
     }
     if (prevMode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
-    if (prevMode === MODE.PINCH && pointers.size < 2) emit('pinchEnd', {});
+    if (prevMode === MODE.PINCH && pointers.size < 2) {
+      pinchIds = null;
+      mode = pointers.size === 0 ? MODE.IDLE : MODE.ABANDONED;
+      emit('pinchEnd', {});
+    }
   };
 
   // Without this, a long press raises the system context menu and Gecko

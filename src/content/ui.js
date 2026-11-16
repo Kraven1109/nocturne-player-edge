@@ -459,6 +459,11 @@ export const createOverlay = ({
 
   const canPan = () => !isPanelOpen() && visuals.canPan();
 
+  const readFocal = (detail) => ({
+    focalX: Number.isFinite(detail?.x) ? detail.x - detail.width / 2 : 0,
+    focalY: Number.isFinite(detail?.y) ? detail.y - detail.height / 2 : 0,
+  });
+
   const recognizer = createRecognizer(
     surface,
     {
@@ -512,19 +517,13 @@ export const createOverlay = ({
         }
         dragTargets[detail.zone]?.end(detail);
       },
-      pinchStart: () => {
-        pinchBase = visuals.beginPinch();
+      pinchStart: (detail) => {
+        pinchBase = visuals.beginPinch(readFocal(detail));
       },
       pinchMove: (detail) => {
-        const focalX = Number.isFinite(detail.x)
-          ? detail.x - detail.width / 2
-          : 0;
-        const focalY = Number.isFinite(detail.y)
-          ? detail.y - detail.height / 2
-          : 0;
+        const focal = readFocal(detail);
         visuals.pinchTo(pinchBase * detail.scale, {
-          focalX,
-          focalY,
+          ...focal,
           dx: detail.dx ?? 0,
           dy: detail.dy ?? 0,
         });
@@ -800,6 +799,7 @@ export const createOverlay = ({
   return {
     relayout: () => visuals.relayout(),
     repin: () => visuals.repin(),
+    getExpectedStyle: () => visuals.getExpectedStyle(),
     rotateQuarter: () => visuals.rotateQuarter(),
     resetRotation: () => visuals.resetRotation(),
     notify: (text) => showToast(text, HINT_MS),

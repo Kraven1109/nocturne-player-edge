@@ -39,6 +39,9 @@ export const createVisuals = (video, stage) => {
   let rotation = 0;
   let isPinching = false;
   let isDragging = false;
+  let lastTransform = 'none';
+  let lastFilter = 'none';
+  let pinchOrigin = null;
 
   const stageSize = () => {
     const rect = stage.getBoundingClientRect();
@@ -80,6 +83,8 @@ export const createVisuals = (video, stage) => {
     video.style.setProperty('filter', filter, 'important');
     video.style.setProperty('transform', transform, 'important');
     video.style.setProperty('transition', transition, 'important');
+    lastFilter = video.style.getPropertyValue?.('filter') || filter;
+    lastTransform = video.style.getPropertyValue?.('transform') || transform;
   };
 
   const place = (scale, { snap = false } = {}) => {
@@ -163,37 +168,70 @@ export const createVisuals = (video, stage) => {
     // the guard knows nothing about, so it has to be written again here or the
     // picture drops back into its letterbox the moment the site touches it.
     repin: apply,
+    getExpectedStyle: () => ({
+      transform: lastTransform,
+      filter: lastFilter,
+    }),
     setColour: (patch) => {
       Object.assign(colour, patch);
       apply();
     },
     getColour: () => ({ ...colour }),
-    beginPinch: () => {
+    beginPinch: ({ focalX = null, focalY = null } = {}) => {
       isPinching = true;
+      pinchOrigin = {
+        scale: view.scale,
+        x: view.x,
+        y: view.y,
+        focalX: Number.isFinite(focalX) ? focalX : null,
+        focalY: Number.isFinite(focalY) ? focalY : null,
+      };
+      apply();
       return view.scale;
     },
     pinchTo: (scale, { focalX = 0, focalY = 0, dx = 0, dy = 0 } = {}) => {
       const cover = coverScale();
       const maxScale = computeMaxScale(cover);
-      const prevScale = view.scale;
       const nextScale = clampScale(scale, maxScale);
-      const focal = computeFocalPan(
-        view.x,
-        view.y,
-        prevScale,
-        nextScale,
-        focalX,
-        focalY,
-        dx,
-        dy,
-      );
-      view.x = focal.x;
-      view.y = focal.y;
+      const anchor = pinchOrigin;
+      if (anchor) {
+        if (anchor.focalX === null) {
+          anchor.focalX = focalX - dx;
+          anchor.focalY = focalY - dy;
+        }
+        const focal = computeFocalPan(
+          anchor.x,
+          anchor.y,
+          anchor.scale,
+          nextScale,
+          anchor.focalX,
+          anchor.focalY,
+          focalX - anchor.focalX,
+          focalY - anchor.focalY,
+        );
+        view.x = focal.x;
+        view.y = focal.y;
+      } else {
+        const focal = computeFocalPan(
+          view.x,
+          view.y,
+          view.scale,
+          nextScale,
+          focalX,
+          focalY,
+          dx,
+          dy,
+        );
+        view.x = focal.x;
+        view.y = focal.y;
+      }
       return setScale(nextScale, { snap: false });
     },
     endPinch: () => {
       isPinching = false;
-      return setScale(view.scale, { snap: true });
+      pinchOrigin = null;
+      const target = view.scale <= 1.03 ? 1 : view.scale;
+      return setScale(target, { snap: false });
     },
     canPan,
     beginPan: () => {

@@ -30,6 +30,14 @@
   - Implemented 2D `1-finger` pan (`canPan`, `beginPan`, `panBy`, `endPan`),
     `pinchMove` midpoint focal tracking, CSS quarter-turn rotation fallback
     (`rotateQuarter` / `resetRotation`), and re-clamping across rotation changes.
+  - Anchored `pinchTo` from `pinchOrigin` (`beginPinch({ focalX, focalY })`),
+    removed `endPinch()` cover snap-back so any scale `> 1.03` stays exact on
+    release, hardened `recognizer.js` against release finger bounce
+    (`MODE.ABANDONED`) and `pointercancel`, stopped touch/pointer event bubbling
+    out of `stage` in `session.js`, added `touch-action: none` on `:host` in
+    `player.css`, and guarded `MutationObserver(pin)` via
+    `isVisualStyleIntact(video, overlay)` so pinch transforms never trigger
+    self-repin flicker or exhaust `MAX_REPINS`.
 
 ## Honest Verification Scope
 
