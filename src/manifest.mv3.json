@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Nocturne Player for Edge",
+  "version": "0.10.0",
+  "description": "Touch-first video player: thick seek bar, gestures, quality/subtitle picker, frame dimming, volume swipe and colour tuning.",
+  "minimum_chrome_version": "111",
+  "author": "Vlad Pohorilets (upstream), Nocturne Edge Contributors",
+  "homepage_url": "https://github.com/Kraven1109/nocturne-player-edge",
+  "permissions": ["storage", "activeTab"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Nocturne Player for Edge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": ["pageagent.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "js": ["content.js"]
+    }
+  ]
+}

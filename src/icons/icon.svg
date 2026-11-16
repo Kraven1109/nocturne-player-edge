@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Nocturne Player for Edge">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2b225a" />
+      <stop offset="55%" stop-color="#17132c" />
+      <stop offset="100%" stop-color="#0b0916" />
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe29a" />
+      <stop offset="50%" stop-color="#ffc46b" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="edgeCyan" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#sky)" />
+  <rect x="2" y="2" width="124" height="124" rx="26" fill="none" stroke="#38bdf8" stroke-opacity="0.22" stroke-width="2" />
+
+  <!-- Eclipse Halo: symmetric Edge-cyan base arc + warm Nocturne amber crescent -->
+  <path
+    d="M 35.7 97.7 A 44 44 0 0 0 92.3 97.7"
+    fill="none"
+    stroke="url(#edgeCyan)"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-opacity="0.9"
+  />
+  <path
+    d="M 24.1 82.6 A 44 44 0 1 1 103.9 82.6"
+    fill="none"
+    stroke="url(#amber)"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+
+  <!-- Optically centered Play prism -->
+  <path
+    d="M 52 44 L 86 64 L 52 84 Z"
+    fill="#f5f3ff"
+    stroke="#f5f3ff"
+    stroke-width="9"
+    stroke-linejoin="round"
+  />
+</svg>
