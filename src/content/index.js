@@ -7,21 +7,28 @@ import {
 
 const PERSIST_DELAY_MS = 400;
 import { createBadge } from './controls/badge.js';
-import { createVideoWatcher } from './detect.js';
+import {
+  createVideoWatcher,
+  isMediaDocumentSupported,
+  resolveHostKey,
+} from './detect.js';
 import { createSession } from './session.js';
 
 // A player embedded in an iframe should honour the decision the user made about
 // the page they can actually see, so the embedding host counts too.
 const resolveHosts = () => {
-  const hosts = [location.host];
+  const hosts = [resolveHostKey(location.protocol, location.host)];
   if (window.top === window) return hosts;
 
   try {
-    hosts.push(window.top.location.host);
+    hosts.push(
+      resolveHostKey(window.top.location.protocol, window.top.location.host),
+    );
   } catch {
     if (document.referrer !== '') {
       try {
-        hosts.push(new URL(document.referrer).host);
+        const ref = new URL(document.referrer);
+        hosts.push(resolveHostKey(ref.protocol, ref.host));
       } catch (error) {
         console.error('Nocturne: unreadable referrer', error);
       }
@@ -31,10 +38,7 @@ const resolveHosts = () => {
 };
 
 const isDocumentSupported = () =>
-  document.contentType === 'text/html' &&
-  location.protocol !== 'about:' &&
-  location.protocol !== 'moz-extension:' &&
-  location.protocol !== 'chrome-extension:';
+  isMediaDocumentSupported(document.contentType, location.protocol);
 
 const start = async () => {
   if (!isDocumentSupported()) return;

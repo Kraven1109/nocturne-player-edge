@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Support for direct `video/*` `MediaDocument` tabs (`http(s)://...mp4`,
+  `webm`, and local `file://` video files when **Allow access to file URLs**
+  is enabled in `edge://extensions`), with protocol-first filtering (`http:`,
+  `https:`, `file:`), popup `'file:'` toggle support, and preemptive Web Audio
+  `canListen` bypass on `file:` so local videos never lose audio.
 - New **Eclipse Halo** vector icon suite (`src/icons/icon.svg`, PNG
   `16`/`32`/`48`/`128`, plus `docs/store/tile-300.png` via `npm run icons`).
 - MV3 package validator (`npm run validate:mv3`) checking manifest, icons,

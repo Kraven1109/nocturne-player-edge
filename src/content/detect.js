@@ -132,3 +132,14 @@ export const createVideoWatcher = (onPrimaryChange) => {
     getCount: () => playable.size,
   };
 };
+
+const SUPPORTED_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
+
+export const isMediaDocumentSupported = (contentType, protocol) => {
+  if (!SUPPORTED_PROTOCOLS.has(protocol)) return false;
+  const type = String(contentType || '');
+  return type === 'text/html' || type.startsWith('video/');
+};
+
+export const resolveHostKey = (protocol, host) =>
+  protocol === 'file:' ? 'file:' : host;

@@ -25,7 +25,7 @@ Touch-first HTML5 video player: precision seek bar, gestures, quality/subtitles,
 ### Detailed Description
 
 ```text
-Nocturne Player for Edge turns any standard HTML5 <video> into a touch-friendly, distraction-free full-screen player — with zero telemetry and zero network requests.
+Nocturne Player for Edge turns any standard HTML5 <video> or direct video tab (.mp4/.webm, including local file:// files when "Allow access to file URLs" is enabled) into a touch-friendly full-screen player — with zero telemetry and zero network requests.
 
 Key Features:
 • Smart Auto-Hide Launcher Badge: stays out of your way while watching and wakes on pointer movement, touch, pause, or keyboard focus.

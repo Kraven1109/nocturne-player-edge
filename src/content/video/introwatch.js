@@ -19,9 +19,9 @@ const MIN_EPISODE_S = 600;
 // film silent.
 const graphs = new WeakMap();
 
-const originOf = (url) => {
+const originOf = (url, baseHref) => {
   try {
-    return new URL(url, location.href).origin;
+    return new URL(url, baseHref).origin;
   } catch {
     return null;
   }
@@ -29,17 +29,24 @@ const originOf = (url) => {
 
 // The browser hands Web Audio silence from a video it fetched from another
 // site without permission — and the viewer would hear that silence too, since
-// the sound now goes through the graph. So the player only listens to a video
-// this frame is allowed to read: its own stream (a `blob:` it made, which is
-// how sites feed MSE), its own address, or one fetched with CORS.
-export const canListen = (video) => {
+// the sound now goes through the graph. Local file:// URLs also yield silence in
+// Chromium Web Audio, so file: bypasses createMediaElementSource up front.
+export const canListen = (
+  video,
+  pageLocation = typeof location !== 'undefined' ? location : null,
+) => {
   const source = video.currentSrc;
   if (source === '' || video.srcObject) return false;
+  if (pageLocation?.protocol === 'file:' || source.startsWith('file:')) {
+    return false;
+  }
+  const baseHref = pageLocation?.href;
+  const pageOrigin = pageLocation?.origin;
   if (source.startsWith('blob:')) {
-    return originOf(source.slice('blob:'.length)) === location.origin;
+    return originOf(source.slice('blob:'.length), baseHref) === pageOrigin;
   }
   if (video.crossOrigin !== null) return true;
-  return originOf(source) === location.origin;
+  return originOf(source, baseHref) === pageOrigin;
 };
 
 const connect = (video) => {

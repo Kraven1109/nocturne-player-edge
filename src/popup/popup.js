@@ -20,16 +20,20 @@ const readHost = (tab) => {
   if (!tab?.url) return null;
   try {
     const url = new URL(tab.url);
-    return url.protocol === 'http:' || url.protocol === 'https:'
-      ? url.host
-      : null;
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return { key: url.host, label: url.host };
+    }
+    if (url.protocol === 'file:') {
+      return { key: 'file:', label: 'Local files (file://)' };
+    }
+    return null;
   } catch (error) {
     console.error('Nocturne: unreadable tab url', error);
     return null;
   }
 };
 
-const describeVideo = async (tab) => {
+const describeVideo = async (tab, host) => {
   if (!tab) return 'No page to inspect.';
   try {
     const state = await browser.tabs.sendMessage(tab.id, {
@@ -41,6 +45,9 @@ const describeVideo = async (tab) => {
     }
     return 'No video detected on this page yet.';
   } catch {
+    if (host?.key === 'file:') {
+      return 'Not active — allow file URLs in edge://extensions.';
+    }
     return 'Not active on this page.';
   }
 };
@@ -55,13 +62,14 @@ const render = async () => {
     enabledToggle.checked = false;
     enabledToggle.disabled = true;
   } else {
-    hostLabel.textContent = host;
-    enabledToggle.checked = isHostEnabled(settings, host);
+    hostLabel.textContent = host.label;
+    enabledToggle.checked = isHostEnabled(settings, host.key);
     enabledToggle.disabled = false;
-    enabledToggle.onchange = () => setHostEnabled(host, enabledToggle.checked);
+    enabledToggle.onchange = () =>
+      setHostEnabled(host.key, enabledToggle.checked);
   }
 
-  statusLine.textContent = await describeVideo(tab);
+  statusLine.textContent = await describeVideo(tab, host);
 };
 
 // A reset forgets the learned openings too: it is the one button that puts

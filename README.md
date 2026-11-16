@@ -11,9 +11,7 @@ It is an independent Chromium Manifest V3 port and continuation of
 **[kvachikk/nocturne-player](https://github.com/kvachikk/nocturne-player)**
 by Vlad Pohorilets (upstream `v0.9.1`, commit `0de5804`, licensed under MPL-2.0).
 
-Works on any site that plays a standard `<video>`, and integrates directly with
-YouTube (desktop and mobile `m.youtube.com`), `hls.js`, `dash.js`, Shaka
-Player, and Playerjs.
+Works on any site that plays a standard `<video>`, direct video tabs (`http(s)://...mp4` and local `file://` files when **Allow access to file URLs** is enabled in `edge://extensions`), YouTube (desktop and mobile `m.youtube.com`), `hls.js`, `dash.js`, Shaka Player, and Playerjs.
 
 ## Features
 

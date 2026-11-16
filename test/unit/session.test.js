@@ -18,17 +18,28 @@ registerHooks({
 const { captureVideoState, commitCapturedVolume, restoreVideoState } =
   await import('../../src/content/session.js');
 
-const createMockVideo = ({ volume = 0.8, muted = false } = {}) => ({
-  volume,
-  muted,
-  playbackRate: 1,
-  style: { cssText: '' },
-  parentNode: null,
-  nextSibling: null,
-  hasAttribute: () => true,
-  setAttribute: () => {},
-  removeAttribute: () => {},
-});
+const createMockVideo = ({
+  volume = 0.8,
+  muted = false,
+  controls = true,
+} = {}) => {
+  let hasControls = controls;
+  return {
+    volume,
+    muted,
+    playbackRate: 1,
+    style: { cssText: '' },
+    parentNode: null,
+    nextSibling: null,
+    hasAttribute: (name) => (name === 'controls' ? hasControls : false),
+    setAttribute: (name) => {
+      if (name === 'controls') hasControls = true;
+    },
+    removeAttribute: (name) => {
+      if (name === 'controls') hasControls = false;
+    },
+  };
+};
 
 test('restoreVideoState preserves committed volume after exit [G1]', () => {
   const video = createMockVideo({ volume: 0.8, muted: false });
@@ -55,4 +66,16 @@ test('restoreVideoState preserves committed volume after exit [G1]', () => {
   restoreVideoState(video, state);
   assert.equal(video.volume, 0);
   assert.equal(video.muted, true);
+});
+
+test('restoreVideoState restores MediaDocument controls attribute [D2]', () => {
+  const withControls = createMockVideo({ controls: true });
+  const state = captureVideoState(withControls);
+  assert.equal(state.hasControlsAttribute, true);
+
+  withControls.removeAttribute('controls');
+  assert.equal(withControls.hasAttribute('controls'), false);
+
+  restoreVideoState(withControls, state);
+  assert.equal(withControls.hasAttribute('controls'), true);
 });
