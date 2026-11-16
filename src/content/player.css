@@ -963,8 +963,8 @@
   touch-action: none;
 }
 
-/* Preview card (thumbnail + chapter + scrub time) rides the hovered/scrubbed
-   position above the seek track. */
+/* Preview pill (chapter + scrub time) rides the hovered/scrubbed position
+   above the seek track. */
 .seek-preview {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -985,47 +985,6 @@
 .seekbar.is-hovering .seek-preview {
   opacity: 1;
   transform: translateX(-50%) scale(1);
-}
-
-.seek-thumb {
-  position: relative;
-  width: 160px;
-  height: 90px;
-  max-width: 160px;
-  max-height: 90px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: rgba(14, 14, 18, 0.92);
-  box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-  display: none;
-}
-
-.seek-thumb.is-ready {
-  display: block;
-}
-
-.seek-thumb-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: contain;
-}
-
-.seek-thumb.is-sprite .seek-thumb-canvas {
-  display: none;
-}
-
-.seek-thumb-sprite {
-  width: 100%;
-  height: 100%;
-  display: none;
-  background-repeat: no-repeat;
-}
-
-.seek-thumb.is-sprite .seek-thumb-sprite {
-  display: block;
 }
 
 .seek-preview-chapter {

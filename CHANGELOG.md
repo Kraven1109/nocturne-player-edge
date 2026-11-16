@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+### Changed
+
+- Fullscreen launcher badge now auto-hides (`opacity: 0; pointer-events: none`)
+  after 2s while a video is playing and reveals on pointer activity inside the
+  video, keyboard focus, or pause — so it never blocks the picture or steals
+  clicks.
+- Removed the seekbar thumbnail box and hidden preview `<video>`; hovering shows
+  only the timestamp and chapter pill, while dragging pauses the main video and
+  previews frames directly on it with `seeked`-gated throttling.
+
 ### Fixed
 
 - Chapters now follow the site's next video under an open player: the

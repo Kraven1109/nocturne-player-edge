@@ -217,7 +217,10 @@ const handleVideoOp = (video, op, request) => {
     const seconds = request.seconds;
     if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return false;
     if (state.host === null || !isFunction(state.host, 'seekTo')) return false;
-    call(state.host, 'seekTo', seconds, Boolean(request.isFinal));
+    // YouTube's seekTo(seconds, false) does not update <video>.currentTime at
+    // all; seekbar previews are paused and seeked-gated, so passing true lets
+    // the main video display preview frames directly while scrubbing.
+    call(state.host, 'seekTo', seconds, true);
     return true;
   }
 

@@ -108,6 +108,26 @@ const startServer = () =>
 
 const clickBadge = async (page) => {
   await page.waitForSelector('[data-nocturne]');
+  const vRect = await page.evaluate(() =>
+    document.querySelector('video').getBoundingClientRect().toJSON(),
+  );
+  const cx = vRect.x + vRect.width / 2;
+  const cy = vRect.y + vRect.height / 2;
+  if (MOBILE) {
+    const isRevealed = await page.evaluate(
+      () =>
+        document.querySelector('[data-nocturne]')?.dataset.revealed === 'true',
+    );
+    if (!isRevealed) await page.touchscreen.tap(cx, cy);
+  } else {
+    await page.mouse.move(cx, cy);
+  }
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-nocturne]')?.dataset.revealed === 'true',
+    null,
+    { timeout: 2000 },
+  );
   const box = await page.evaluate(() =>
     document.querySelector('[data-nocturne]').getBoundingClientRect().toJSON(),
   );

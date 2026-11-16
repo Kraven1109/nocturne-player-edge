@@ -2,11 +2,9 @@ import { chapterAt } from '../video/chapters.js';
 import { formatClock, formatRemaining } from '../../lib/time.js';
 import { el } from '../shell.js';
 
-const PREVIEW_INTERVAL_MS = 120;
-const THUMB_WIDTH = 160;
-const THUMB_HEIGHT = 90;
-const BUCKET_STEP_SEC = 0.5;
-const MAX_CACHED_FRAMES = 60;
+const SEEK_SETTLE_MS = 60;
+const SEEK_STALL_MS = 400;
+const SEEK_EPSILON_S = 0.5;
 const EDGE_CLAMP_MIN = 8;
 const EDGE_CLAMP_MAX = 92;
 
@@ -41,252 +39,6 @@ export const clampPreviewPercent = (ratio) => {
   return Math.min(EDGE_CLAMP_MAX, Math.max(EDGE_CLAMP_MIN, percent));
 };
 
-// Fits a frame inside the thumbnail box without stretching it.
-export const fitThumb = (
-  videoWidth,
-  videoHeight,
-  maxWidth = THUMB_WIDTH,
-  maxHeight = THUMB_HEIGHT,
-) => {
-  if (
-    !Number.isFinite(videoWidth) ||
-    !Number.isFinite(videoHeight) ||
-    videoWidth <= 0 ||
-    videoHeight <= 0
-  ) {
-    return { width: maxWidth, height: maxHeight };
-  }
-  const scale = Math.min(maxWidth / videoWidth, maxHeight / videoHeight);
-  return {
-    width: Math.max(1, Math.round(videoWidth * scale)),
-    height: Math.max(1, Math.round(videoHeight * scale)),
-  };
-};
-
-const isDirectMediaUrl = (src) =>
-  typeof src === 'string' &&
-  src !== '' &&
-  !src.startsWith('blob:') &&
-  !src.startsWith('mediasource:');
-
-const createThumbnailer = (video, thumbBox, thumbCanvas, thumbSprite) => {
-  const ctx =
-    typeof thumbCanvas.getContext === 'function'
-      ? thumbCanvas.getContext('2d')
-      : null;
-  const cache = new Map();
-
-  let lastSpriteAt = 0;
-  let spriteShown = false;
-  let previewVideo = null;
-  let loadedSrc = '';
-  let isSeekingPreview = false;
-  let pendingBucket = null;
-  let activeBucket = null;
-
-  const sizeBox = (width, height) => {
-    thumbBox.style.width = `${width}px`;
-    thumbBox.style.height = `${height}px`;
-  };
-
-  const sizeCanvas = (width, height) => {
-    if (thumbCanvas.width !== width) thumbCanvas.width = width;
-    if (thumbCanvas.height !== height) thumbCanvas.height = height;
-    sizeBox(width, height);
-  };
-
-  const setMode = (mode) => {
-    thumbBox.classList.toggle('is-ready', mode !== 'none');
-    thumbBox.classList.toggle('is-sprite', mode === 'sprite');
-  };
-
-  const cacheFrame = (bucket) => {
-    if (!ctx) return;
-    try {
-      const data = ctx.getImageData(
-        0,
-        0,
-        thumbCanvas.width,
-        thumbCanvas.height,
-      );
-      if (cache.size >= MAX_CACHED_FRAMES) {
-        const oldest = cache.keys().next().value;
-        cache.delete(oldest);
-      }
-      cache.set(bucket, data);
-    } catch {
-      // Cross-origin media without CORS headers taints the canvas; ignore.
-    }
-  };
-
-  const drawFromElement = (sourceEl) => {
-    if (!ctx) return false;
-    try {
-      const { width, height } = fitThumb(
-        sourceEl.videoWidth,
-        sourceEl.videoHeight,
-      );
-      sizeCanvas(width, height);
-      ctx.drawImage(sourceEl, 0, 0, width, height);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const runNextPreviewSeek = () => {
-    if (
-      isSeekingPreview ||
-      pendingBucket === null ||
-      previewVideo === null ||
-      previewVideo.readyState < 1
-    ) {
-      return;
-    }
-    const target = pendingBucket;
-    pendingBucket = null;
-    isSeekingPreview = true;
-    try {
-      previewVideo.currentTime = target;
-    } catch {
-      isSeekingPreview = false;
-    }
-  };
-
-  const ensurePreviewVideo = () => {
-    const src = video.currentSrc || '';
-    if (!isDirectMediaUrl(src)) return null;
-    if (previewVideo !== null && loadedSrc === src) return previewVideo;
-
-    if (previewVideo !== null) {
-      previewVideo.removeAttribute('src');
-      previewVideo.load();
-    }
-
-    loadedSrc = src;
-    cache.clear();
-    isSeekingPreview = false;
-    pendingBucket = null;
-
-    const elVideo = document.createElement('video');
-    elVideo.muted = true;
-    elVideo.playsInline = true;
-    elVideo.preload = 'auto';
-    elVideo.src = src;
-
-    elVideo.addEventListener('loadedmetadata', () => {
-      runNextPreviewSeek();
-    });
-
-    elVideo.addEventListener('seeked', () => {
-      const bucket =
-        Math.round(elVideo.currentTime / BUCKET_STEP_SEC) * BUCKET_STEP_SEC;
-      isSeekingPreview = false;
-      if (drawFromElement(elVideo)) {
-        cacheFrame(bucket);
-        if (activeBucket === bucket) setMode('canvas');
-      }
-      runNextPreviewSeek();
-    });
-
-    previewVideo = elVideo;
-    return previewVideo;
-  };
-
-  const tryYouTubeSprite = (ratio) => {
-    if (typeof document === 'undefined') return false;
-    const scope =
-      video.closest('.html5-video-player') ??
-      document.querySelector('#movie_player') ??
-      document;
-    const now = performance.now();
-    if (now - lastSpriteAt < PREVIEW_INTERVAL_MS) return spriteShown;
-    lastSpriteAt = now;
-    const bar = scope.querySelector('.ytp-progress-bar');
-    if (bar !== null) {
-      const rect = bar.getBoundingClientRect();
-      if (rect.width > 0) {
-        bar.dispatchEvent(
-          new MouseEvent('mousemove', {
-            bubbles: true,
-            cancelable: true,
-            clientX: rect.left + clampRatio(ratio) * rect.width,
-            clientY: rect.top + rect.height / 2,
-          }),
-        );
-      }
-    }
-    const bg = scope.querySelector('.ytp-tooltip-bg');
-    if (bg === null) return (spriteShown = false);
-    const bgImage = bg.style.backgroundImage;
-    if (!bgImage || bgImage === 'none') return (spriteShown = false);
-
-    thumbSprite.style.backgroundImage = bgImage;
-    thumbSprite.style.backgroundPosition = bg.style.backgroundPosition || '0 0';
-    thumbSprite.style.backgroundSize = bg.style.backgroundSize || 'auto';
-    if (bg.style.width) thumbSprite.style.width = bg.style.width;
-    if (bg.style.height) thumbSprite.style.height = bg.style.height;
-    sizeBox(
-      parseFloat(bg.style.width) || THUMB_WIDTH,
-      parseFloat(bg.style.height) || THUMB_HEIGHT,
-    );
-    setMode('sprite');
-    spriteShown = true;
-    return true;
-  };
-
-  const requestAt = (seconds, ratio) => {
-    const bucket = Math.round(seconds / BUCKET_STEP_SEC) * BUCKET_STEP_SEC;
-    activeBucket = bucket;
-
-    if (cache.has(bucket) && ctx) {
-      const cached = cache.get(bucket);
-      sizeCanvas(cached.width, cached.height);
-      ctx.putImageData(cached, 0, 0);
-      setMode('canvas');
-      return;
-    }
-
-    const helper = ensurePreviewVideo();
-    if (helper !== null) {
-      if (
-        video.readyState >= 2 &&
-        Math.abs(video.currentTime - seconds) <= BUCKET_STEP_SEC &&
-        drawFromElement(video)
-      ) {
-        setMode('canvas');
-      }
-      pendingBucket = bucket;
-      runNextPreviewSeek();
-      return;
-    }
-
-    if (tryYouTubeSprite(ratio)) return;
-
-    if (
-      video.readyState >= 2 &&
-      Math.abs(video.currentTime - seconds) <= BUCKET_STEP_SEC &&
-      drawFromElement(video)
-    ) {
-      setMode('canvas');
-      return;
-    }
-
-    setMode('none');
-  };
-
-  const destroy = () => {
-    cache.clear();
-    if (previewVideo !== null) {
-      previewVideo.removeAttribute('src');
-      previewVideo.load();
-      previewVideo = null;
-    }
-  };
-
-  return { requestAt, destroy };
-};
-
 export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
   const elapsed = el('span', { class: 'time', text: '0:00' });
   const remaining = el('span', { class: 'time', text: '--:--' });
@@ -295,20 +47,9 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
   const zones = el('div', { class: 'seek-zones' });
   const track = el('div', { class: 'seek-track' }, [fill, zones, marks]);
 
-  const thumbCanvas = el('canvas', {
-    class: 'seek-thumb-canvas',
-    width: String(THUMB_WIDTH),
-    height: String(THUMB_HEIGHT),
-  });
-  const thumbSprite = el('div', { class: 'seek-thumb-sprite' });
-  const thumbBox = el('div', { class: 'seek-thumb' }, [
-    thumbCanvas,
-    thumbSprite,
-  ]);
   const previewChapter = el('span', { class: 'seek-preview-chapter' });
   const headTime = el('span', { class: 'seek-time', text: '0:00' });
   const previewBox = el('div', { class: 'seek-preview' }, [
-    thumbBox,
     previewChapter,
     headTime,
   ]);
@@ -320,24 +61,27 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     el('div', { class: 'seek-row' }, [elapsed, area, remaining]),
   ]);
 
-  const thumbnailer = createThumbnailer(
-    video,
-    thumbBox,
-    thumbCanvas,
-    thumbSprite,
-  );
-
   let isScrubbing = false;
   let isPointerScrub = false;
+  let wasPlayingBeforeScrub = false;
+  let isPreviewSeeking = false;
+  let pendingPreviewTime = null;
+  let previewTimer = null;
+  let lastDispatchedTime = null;
   let activePointerId = null;
   let lastPointerX = 0;
   let scrubTime = 0;
-  let lastPreviewAt = 0;
   let chapters = [];
   let arePlaced = false;
   let spans = [];
 
   const duration = () => (Number.isFinite(video.duration) ? video.duration : 0);
+
+  const clearPreviewTimer = () => {
+    if (previewTimer === null) return;
+    clearTimeout(previewTimer);
+    previewTimer = null;
+  };
 
   // The dividers can only be placed once the film has told us how long it is,
   // so placing them is retried from the paint that follows.
@@ -397,8 +141,6 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     const chapterText = chapter === null ? '' : chapter.title;
     previewChapter.textContent = chapterText;
     previewChapter.classList.toggle('is-visible', chapterText !== '');
-
-    thumbnailer.requestAt(time, ratio);
   };
 
   // While scrubbing the left label holds the moment the drag started, so the
@@ -422,12 +164,72 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     paint(video.currentTime);
   };
 
-  const start = () => {
-    scrubTime = video.currentTime;
-    lastPreviewAt = 0;
-    elapsed.textContent = formatClock(scrubTime);
+  let dispatchPreviewSeek = () => {};
+
+  const flushPendingPreview = () => {
+    previewTimer = null;
+    if (!isScrubbing || pendingPreviewTime === null) return;
+    const next = pendingPreviewTime;
+    pendingPreviewTime = null;
+    dispatchPreviewSeek(next);
+  };
+
+  const onSeekStall = () => {
+    previewTimer = null;
+    isPreviewSeeking = false;
+    if (isScrubbing && pendingPreviewTime !== null) {
+      flushPendingPreview();
+    }
+  };
+
+  dispatchPreviewSeek = (time) => {
+    clearPreviewTimer();
+    isPreviewSeeking = true;
+    lastDispatchedTime = time;
+    previewTimer = setTimeout(onSeekStall, SEEK_STALL_MS);
+    seek(time, false);
+  };
+
+  const requestPreviewSeek = (time) => {
+    if (isPreviewSeeking || previewTimer !== null) {
+      pendingPreviewTime = time;
+      return;
+    }
+    dispatchPreviewSeek(time);
+  };
+
+  const onPreviewSeeked = () => {
+    if (!isScrubbing || !isPreviewSeeking) return;
+    if (
+      lastDispatchedTime !== null &&
+      Math.abs(video.currentTime - lastDispatchedTime) >= SEEK_EPSILON_S
+    ) {
+      return;
+    }
+    clearPreviewTimer();
+    isPreviewSeeking = false;
+    if (pendingPreviewTime !== null) {
+      previewTimer = setTimeout(flushPendingPreview, SEEK_SETTLE_MS);
+    }
+  };
+
+  const beginScrub = (initialTime) => {
+    clearPreviewTimer();
+    isPreviewSeeking = false;
+    pendingPreviewTime = null;
+    lastDispatchedTime = null;
+    if (!isScrubbing) wasPlayingBeforeScrub = !video.paused;
+    scrubTime = initialTime;
     isScrubbing = true;
     root.classList.add('is-scrubbing');
+    if (wasPlayingBeforeScrub && typeof video.pause === 'function') {
+      video.pause();
+    }
+  };
+
+  const start = () => {
+    elapsed.textContent = formatClock(video.currentTime);
+    beginScrub(video.currentTime);
     updatePreview(scrubTime);
   };
 
@@ -447,18 +249,29 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     scrubTime += (dx / width) * total * step.factor;
     scrubTime = Math.min(total, Math.max(0, scrubTime));
     paint(scrubTime);
-
-    const now = performance.now();
-    if (now - lastPreviewAt < PREVIEW_INTERVAL_MS) return;
-    lastPreviewAt = now;
-    seek(scrubTime, false);
+    requestPreviewSeek(scrubTime);
   };
 
   const end = () => {
     if (!isScrubbing) return;
+    clearPreviewTimer();
+    isPreviewSeeking = false;
+    pendingPreviewTime = null;
+    lastDispatchedTime = null;
     isScrubbing = false;
+    isPointerScrub = false;
+    activePointerId = null;
     root.classList.remove('is-scrubbing');
     if (duration() > 0) seek(scrubTime, true);
+    if (wasPlayingBeforeScrub) {
+      wasPlayingBeforeScrub = false;
+      if (typeof video.play === 'function') {
+        const result = video.play();
+        if (result && typeof result.catch === 'function') {
+          result.catch(() => {});
+        }
+      }
+    }
     paint(scrubTime);
   };
 
@@ -483,13 +296,10 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     activePointerId = event.pointerId;
     lastPointerX = event.clientX;
     isPointerScrub = true;
-    isScrubbing = true;
-    lastPreviewAt = performance.now();
     elapsed.textContent = formatClock(video.currentTime);
-    scrubTime = ratio * total;
-    root.classList.add('is-scrubbing');
+    beginScrub(ratio * total);
     paint(scrubTime);
-    seek(scrubTime, false);
+    requestPreviewSeek(scrubTime);
   };
 
   const handleTrackMove = (event) => {
@@ -515,14 +325,11 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
       }
       lastPointerX = event.clientX;
       paint(scrubTime);
-
-      const now = performance.now();
-      if (now - lastPreviewAt >= PREVIEW_INTERVAL_MS) {
-        lastPreviewAt = now;
-        seek(scrubTime, false);
-      }
+      requestPreviewSeek(scrubTime);
       return;
     }
+
+    if (isScrubbing) return;
 
     const ratio = ratioFromPointer(event.clientX, rect);
     const hoverTime = ratio * total;
@@ -534,8 +341,6 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
     if (!isPointerScrub || event.pointerId !== activePointerId) return;
     event.stopPropagation();
     onInteract();
-    isPointerScrub = false;
-    activePointerId = null;
     end();
   };
 
@@ -554,6 +359,7 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
   video.addEventListener('durationchange', placeZones);
   video.addEventListener('durationchange', replaceMarks);
   video.addEventListener('seeked', sync);
+  video.addEventListener('seeked', onPreviewSeeked);
   sync();
 
   return {
@@ -579,7 +385,8 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
       showChapter(video.currentTime);
     },
     destroy: () => {
-      thumbnailer.destroy();
+      if (isScrubbing) end();
+      clearPreviewTimer();
       area.removeEventListener('pointerdown', handleTrackDown);
       area.removeEventListener('pointermove', handleTrackMove);
       area.removeEventListener('pointerup', handleTrackUp);
@@ -590,6 +397,7 @@ export const createSeekBar = (video, seek, { onInteract = () => {} } = {}) => {
       video.removeEventListener('durationchange', placeZones);
       video.removeEventListener('durationchange', replaceMarks);
       video.removeEventListener('seeked', sync);
+      video.removeEventListener('seeked', onPreviewSeeked);
     },
   };
 };
