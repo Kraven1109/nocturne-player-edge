@@ -40,6 +40,7 @@ const ALLOWED_OPS = new Set([
   'chapters.snapshot',
   'playerjs.id',
   'seek',
+  'setVolume',
   'fullscreen.lock',
   'fullscreen.unlock',
 ]);
@@ -221,6 +222,25 @@ const handleVideoOp = (video, op, request) => {
     // all; seekbar previews are paused and seeked-gated, so passing true lets
     // the main video display preview frames directly while scrubbing.
     call(state.host, 'seekTo', seconds, true);
+    return true;
+  }
+
+  if (op === 'setVolume') {
+    const volume = request.volume;
+    const muted = request.muted;
+    if (
+      typeof volume !== 'number' ||
+      !Number.isFinite(volume) ||
+      typeof muted !== 'boolean'
+    ) {
+      return false;
+    }
+    if (state.host === null || !isFunction(state.host, 'setVolume')) {
+      return false;
+    }
+    const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+    call(state.host, 'setVolume', clamped);
+    call(state.host, muted ? 'mute' : 'unMute');
     return true;
   }
 

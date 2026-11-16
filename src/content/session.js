@@ -76,7 +76,7 @@ const VIDEO_STYLE_KEYS = Object.keys(VIDEO_STYLE).concat([
   'filter',
 ]);
 
-const captureVideoState = (video) => ({
+export const captureVideoState = (video) => ({
   cssText: video.style.cssText,
   hasControlsAttribute: video.hasAttribute('controls'),
   playbackRate: video.playbackRate,
@@ -86,7 +86,12 @@ const captureVideoState = (video) => ({
   nextSibling: video.nextSibling,
 });
 
-const restoreVideoState = (video, state) => {
+export const commitCapturedVolume = (state, volume, isMuted) => {
+  state.volume = volume;
+  state.isMuted = Boolean(isMuted);
+};
+
+export const restoreVideoState = (video, state) => {
   video.style.cssText = state.cssText;
   if (state.hasControlsAttribute) video.setAttribute('controls', '');
   else video.removeAttribute('controls');
@@ -346,6 +351,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       onExit: () => actions.exit(),
       settings,
       onPersist,
+      onVolumeCommit: (volume, isMuted) =>
+        commitCapturedVolume(state, volume, isMuted),
       onFeedStep: (direction) => actions.step(direction),
       onFullscreen: () => actions.fullscreen(),
       isChromeShown,

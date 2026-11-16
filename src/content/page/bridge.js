@@ -111,6 +111,12 @@ export const seekOnSite = (video, seconds, isFinal = true) =>
     isFinal: Boolean(isFinal),
   }) === true;
 
+export const setSiteVolume = (video, volume, muted) =>
+  requestSync(video, 'setVolume', {
+    volume: Math.round(Math.max(0, Math.min(1, Number(volume))) * 100),
+    muted: Boolean(muted),
+  }) === true;
+
 export const lockFullscreen = () =>
   requestSync(document.documentElement, 'fullscreen.lock') === true;
 

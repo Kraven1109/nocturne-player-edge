@@ -13,6 +13,7 @@ export const DEFAULTS = Object.freeze({
   subtitleScale: 1,
   areSubtitlesNative: false,
   isIntroSkipOn: true,
+  isVerticalGesturesOn: false,
   disabledHosts: [],
 });
 
@@ -32,6 +33,9 @@ const RANGES = {
 };
 
 const inRange = (key, value) => {
+  if (typeof DEFAULTS[key] === 'boolean') {
+    return typeof value === 'boolean' ? value : DEFAULTS[key];
+  }
   const range = RANGES[key];
   if (range === undefined) return value;
   const isNumber = typeof value === 'number' && Number.isFinite(value);

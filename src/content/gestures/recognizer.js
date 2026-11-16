@@ -34,12 +34,13 @@ const distanceBetween = (first, second) => {
 export const createRecognizer = (
   surface,
   handlers,
-  { canSwipe = () => false } = {},
+  { canSwipe = () => false, canVerticalDrag = () => false } = {},
 ) => {
   const pointers = new Map();
 
   let mode = MODE.IDLE;
   let anchor = null;
+  let dragAxis = 'horizontal';
   let holdTimer = null;
   let tapTimer = null;
   let tapCount = 0;
@@ -113,11 +114,16 @@ export const createRecognizer = (
 
   const startPinch = () => {
     clearHoldTimer();
-    if (mode === MODE.DRAG) emit('dragEnd', { zone: anchor.zone });
-    if (mode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
+    const prevMode = mode;
+    const prevAxis = dragAxis;
     const points = Array.from(pointers.values());
     pinchStartDistance = distanceBetween(points[0], points[1]);
     mode = MODE.PINCH;
+    dragAxis = 'horizontal';
+    if (prevMode === MODE.DRAG) {
+      emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
+    }
+    if (prevMode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
     emit('pinchStart', {});
   };
 
@@ -181,19 +187,30 @@ export const createRecognizer = (
         mode = MODE.SWIPE;
         return;
       }
-      if (!isDragZone(anchor.zone)) {
+      const isVerticalSideDrag =
+        isVerticalMove(dx, dy) && isHoldZone(anchor.zone) && canVerticalDrag();
+      if (!isVerticalSideDrag && !isDragZone(anchor.zone)) {
         mode = MODE.ABANDONED;
         return;
       }
+      dragAxis = isVerticalSideDrag ? 'vertical' : 'horizontal';
       mode = MODE.DRAG;
-      emit('dragStart', { zone: anchor.zone, x: anchor.x, y: anchor.y });
+      emit('dragStart', {
+        zone: anchor.zone,
+        axis: dragAxis,
+        x: anchor.x,
+        y: anchor.y,
+      });
     }
 
     if (mode !== MODE.DRAG) return;
     emit('dragMove', {
       zone: anchor.zone,
+      axis: dragAxis,
       dx: point.x - anchor.lastX,
       dy: point.y - anchor.lastY,
+      totalDx: point.x - anchor.x,
+      totalDy: point.y - anchor.y,
       x: point.x,
       y: point.y,
       width: point.width,
@@ -215,28 +232,43 @@ export const createRecognizer = (
 
     if (mode === MODE.PINCH) {
       if (pointers.size >= 2) return;
-      emit('pinchEnd', {});
       mode = pointers.size === 0 ? MODE.IDLE : MODE.ABANDONED;
+      emit('pinchEnd', {});
       return;
     }
     if (pointers.size > 0) return;
 
     clearHoldTimer();
-    if (mode === MODE.DRAG) emit('dragEnd', { zone: anchor.zone });
-    else if (mode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
-    else if (mode === MODE.SWIPE) finishSwipe(event);
-    else if (mode === MODE.PENDING) registerTap(anchor.zone, anchor);
+    const prevMode = mode;
+    const prevAxis = dragAxis;
     mode = MODE.IDLE;
+    dragAxis = 'horizontal';
+    if (prevMode === MODE.DRAG) {
+      emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
+    } else if (prevMode === MODE.HOLD) {
+      emit('holdEnd', { zone: anchor.zone });
+    } else if (prevMode === MODE.SWIPE) {
+      finishSwipe(event);
+    } else if (prevMode === MODE.PENDING) {
+      registerTap(anchor.zone, anchor);
+    }
   };
 
   const handleCancel = (event) => {
     if (!pointers.has(event.pointerId)) return;
     pointers.delete(event.pointerId);
     clearHoldTimer();
-    if (mode === MODE.DRAG) emit('dragEnd', { zone: anchor.zone });
-    if (mode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
-    if (mode === MODE.PINCH && pointers.size < 2) emit('pinchEnd', {});
-    if (pointers.size === 0) mode = MODE.IDLE;
+    const prevMode = mode;
+    const prevAxis = dragAxis;
+    if (pointers.size === 0) {
+      mode = MODE.IDLE;
+      dragAxis = 'horizontal';
+    }
+    if (prevMode === MODE.DRAG) {
+      emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
+    }
+    if (prevMode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
+    if (prevMode === MODE.PINCH && pointers.size < 2) emit('pinchEnd', {});
   };
 
   // Without this, a long press raises the system context menu and Gecko
@@ -248,6 +280,7 @@ export const createRecognizer = (
   surface.addEventListener('pointermove', handleMove);
   surface.addEventListener('pointerup', handleUp);
   surface.addEventListener('pointercancel', handleCancel);
+  surface.addEventListener('lostpointercapture', handleCancel);
 
   return {
     setEnabled: (value) => {
@@ -261,6 +294,7 @@ export const createRecognizer = (
       surface.removeEventListener('pointermove', handleMove);
       surface.removeEventListener('pointerup', handleUp);
       surface.removeEventListener('pointercancel', handleCancel);
+      surface.removeEventListener('lostpointercapture', handleCancel);
     },
   };
 };

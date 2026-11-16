@@ -6,6 +6,7 @@ import {
   createBridgeAudioTracks,
   createBridgeQualityAdapter,
   requestSync,
+  setSiteVolume,
 } from '../../src/content/page/bridge.js';
 
 const createMockElement = ({ isConnected = true, onDispatch = null } = {}) => {
@@ -170,4 +171,20 @@ test('chaptersSnapshot is empty when nothing usable answers', () => {
   assert.deepEqual(chaptersSnapshot(createMockElement()), empty);
   assert.deepEqual(chaptersSnapshot(answering('nope')), empty);
   assert.deepEqual(chaptersSnapshot(answering({ videoId: '' })), empty);
+});
+
+test('setSiteVolume rounds 0..100 integer and sends muted flag', () => {
+  const video = answering(true);
+  assert.equal(setSiteVolume(video, 0.724, false), true);
+  assert.equal(setSiteVolume(video, -0.4, true), true);
+
+  const requests = video.dispatched.filter((e) => e.type === 'nocturne:req');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].detail.op, 'setVolume');
+  assert.equal(requests[0].detail.volume, 72);
+  assert.equal(requests[0].detail.muted, false);
+  assert.equal(requests[1].detail.volume, 0);
+  assert.equal(requests[1].detail.muted, true);
+
+  assert.equal(setSiteVolume(createMockElement(), 0.5, false), false);
 });

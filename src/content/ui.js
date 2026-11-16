@@ -2,8 +2,10 @@ import {
   chaptersSnapshot,
   createBridgeAudioTracks,
   createBridgeQualityAdapter,
+  setSiteVolume,
 } from './page/bridge.js';
 import { createColorPanel } from './controls/colorpanel.js';
+import { createDimDrag, createVolumeDrag } from './gestures/verticaldrag.js';
 import { createMenu } from './controls/menu.js';
 import { createPlaylistPanel } from './controls/playlistpanel.js';
 import { createPlaylist } from './video/playlist.js';
@@ -155,6 +157,7 @@ export const createOverlay = ({
   onExit,
   settings,
   onPersist,
+  onVolumeCommit = () => {},
   onFeedStep,
   onFullscreen,
   isChromeShown = true,
@@ -223,6 +226,7 @@ export const createOverlay = ({
   let pinchBase = 1;
   let skipTarget = null;
   let releaseHold = null;
+  let isVerticalGesturesOn = Boolean(settings.isVerticalGesturesOn);
 
   // A duration of null keeps the toast up until hideToast takes it down: the
   // 2x label stays for as long as the finger does.
@@ -269,6 +273,11 @@ export const createOverlay = ({
       if (isOn) return;
       introSkip.show(null);
       seekBar.setZones([]);
+    },
+    isVerticalGesturesOn,
+    onVerticalGestures: (isOn) => {
+      isVerticalGesturesOn = isOn;
+      onPersist({ isVerticalGesturesOn: isOn });
     },
   });
 
@@ -401,7 +410,26 @@ export const createOverlay = ({
     hideToast();
   };
 
-  const dragTargets = { [ZONE.SEEK]: seekBar };
+  const dimDrag = createDimDrag({
+    dimLayer: layers.dim,
+    showToast,
+    toastMs: TOAST_MS,
+  });
+  const volumeDrag = createVolumeDrag({
+    video,
+    onCommit: (volume, isMuted) => {
+      onVolumeCommit(volume, isMuted);
+      setSiteVolume(video, volume, isMuted);
+    },
+    showToast,
+    toastMs: TOAST_MS,
+  });
+
+  const dragTargets = {
+    [ZONE.SEEK]: seekBar,
+    [ZONE.HOLD_LEFT]: dimDrag,
+    [ZONE.HOLD_RIGHT]: volumeDrag,
+  };
 
   const canSwipe = () =>
     !isPanelOpen() &&
@@ -411,6 +439,8 @@ export const createOverlay = ({
       video.videoWidth,
       video.videoHeight,
     );
+
+  const canVerticalDrag = () => isVerticalGesturesOn && !isPanelOpen();
 
   const recognizer = createRecognizer(
     surface,
@@ -443,12 +473,12 @@ export const createOverlay = ({
         showToast(isForward ? '2x ▶▶' : '◀◀ 2x', null);
       },
       holdEnd: () => stopHold(),
-      dragStart: ({ zone }) => {
-        setChromeVisible(true);
-        dragTargets[zone]?.start();
+      dragStart: (detail) => {
+        if (detail.zone === ZONE.SEEK) setChromeVisible(true);
+        dragTargets[detail.zone]?.start(detail);
       },
       dragMove: (detail) => dragTargets[detail.zone]?.move(detail),
-      dragEnd: ({ zone }) => dragTargets[zone]?.end(),
+      dragEnd: (detail) => dragTargets[detail.zone]?.end(detail),
       pinchStart: () => {
         pinchBase = visuals.beginPinch();
       },
@@ -456,7 +486,7 @@ export const createOverlay = ({
       pinchEnd: () => visuals.endPinch(),
       swipe: ({ direction }) => onFeedStep(direction),
     },
-    { canSwipe },
+    { canSwipe, canVerticalDrag },
   );
 
   buttons.play = buildButton(
@@ -697,6 +727,7 @@ export const createOverlay = ({
   video.addEventListener('durationchange', handleSourceEvent);
   armChapterScan();
 
+  dimDrag.reset();
   restoreSettings();
   // Kept as a list so the overlay can take itself off the screen again: the
   // shadow root outlives it when a feed moves on to its next video.
@@ -721,6 +752,8 @@ export const createOverlay = ({
     showControls: () => setChromeVisible(true),
     destroy: () => {
       for (const node of roots) node.remove();
+      volumeDrag.end();
+      dimDrag.reset();
       recognizer.destroy();
       seekBar.destroy();
       skipFeedback.destroy();

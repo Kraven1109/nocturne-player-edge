@@ -45,6 +45,10 @@
   transition: opacity 200ms ease;
 }
 
+.dim.is-dragging {
+  transition: none;
+}
+
 /* Depth under the controls rather than a flat wash: the film keeps playing
    underneath, and the buttons still have to be legible over a white scene. */
 .scrim {

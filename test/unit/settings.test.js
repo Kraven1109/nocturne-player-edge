@@ -62,3 +62,15 @@ test('colour set on the current schema is kept', () => {
   assert.equal(settings.saturate, 0);
   assert.equal(settings.contrast, 1.2);
 });
+
+test('isVerticalGesturesOn defaults false and rejects non-booleans', () => {
+  assert.equal(normalize(null).isVerticalGesturesOn, false);
+  assert.equal(
+    normalize({ isVerticalGesturesOn: true }).isVerticalGesturesOn,
+    true,
+  );
+  assert.equal(
+    normalize({ isVerticalGesturesOn: 'yes' }).isVerticalGesturesOn,
+    false,
+  );
+});

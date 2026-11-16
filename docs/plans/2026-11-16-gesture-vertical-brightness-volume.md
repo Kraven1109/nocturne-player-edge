@@ -1,7 +1,7 @@
 # Plan / Ticket: Vertical Edge Gestures (Left Dim / AUTO & Right Volume)
 
 **Date:** 2026-11-16  
-**Status:** Stage 2 Gate Complete — Patches G1–G5 & §5 Edge Probes Done, Ready for Stage 3 Approval (0 Production Code Touched)  
+**Status:** Complete — Stage 3 & Stage 4 Verified (Ready for Stage 5 Commit)  
 **Prerequisite:** Batch 1 committed (`2436bc9`, `docs/plans/2026-11-16-smart-badge-and-direct-video-scrub.md`)
 
 ---
@@ -43,13 +43,14 @@ Hiện tại trong `recognizer.js`:
        - Vùng `ZONE.DEAD` (dải giữa `40%..60%`) và `ZONE.SEEK` (`72%..88%`) **không** nhận kéo sáng/volume.
        - Nếu kéo ngang (`!isVerticalMove(dx, dy)`) trên `HOLD_LEFT`/`HOLD_RIGHT`: rơi vào `MODE.ABANDONED` như cũ (chỉ `ZONE.SEEK` mới drag ngang).
    - **Đa chạm (Pinch):** Khi có ngón thứ 2 (`pointers.size === 2`), `startPinch()` ở `recognizer.js:116` đã tự phát `dragEnd` và chuyển sang `MODE.PINCH` — tự động an toàn.
-   - **Ngắt pointer bất ngờ (`pointercancel` / `lostpointercapture`) — [Patch G3]:** `recognizer.js` hiện có `handleCancel` cho `pointercancel` nhưng chưa lắng nghe `lostpointercapture`. Cần bổ sung lắng nghe cả `pointercancel` và `lostpointercapture` trên stage để khi bị trình duyệt/OS cướp pointer giữa chừng trong lúc `MODE.DRAG_VERTICAL`, recognizer luôn phát `dragEnd` sạch (chốt nguyên giá trị Dim/Volume hiện tại, **không** revert, và tắt HUD toast theo chu kỳ `TOAST_MS = 900`).
+   - **Ngắt pointer bất ngờ (`pointercancel` / `lostpointercapture`) — [Patch G3, H1]:** `recognizer.js` hiện có `handleCancel` cho `pointercancel` nhưng chưa lắng nghe `lostpointercapture`. Cần bổ sung lắng nghe cả `pointercancel` và `lostpointercapture` trên stage để khi bị trình duyệt/OS cướp pointer giữa chừng trong lúc `MODE.DRAG_VERTICAL`, recognizer luôn phát `dragEnd` sạch (chốt nguyên giá trị Dim/Volume hiện tại, **không** revert, và tắt HUD toast theo chu kỳ `TOAST_MS = 900`).
+     - **IDEMPOTENCY BẮT BUỘC (H1):** Theo Pointer Events spec, `lostpointercapture` tự động bắn sau **mọi** `pointerup` và `pointercancel` khi đang capture (implicit release). Handler `handleCancel` / `lostpointercapture` chỉ xử lý khi pointer đang active và `mode` tương ứng đang mở (`mode === MODE.DRAG`, v.v.), đồng thời **reset `mode` TRƯỚC khi `emit('dragEnd', ...)`** — bảo đảm mỗi cú kéo commit đúng 1 lần trên mọi đường kết thúc (`pointerup + lostpointercapture`, `pointercancel + lostpointercapture`, `pinch-start`).
 
-### 2.2. Toán học & Cảm giác kéo — [Patch G1, G2, G4]
+### 2.2. Toán học & Cảm giác kéo — [Patch G1, G2, G4, H2, H3]
 
 - **Mô hình tính từ điểm neo (anchor-based cumulative math, tránh trôi cộng dồn frame-delta — Patch G2):**
   - Độ nhạy: kéo quãng `0.75 * h` (75% chiều cao stage) đi hết dải `0..1`.
-  - Lúc `dragStart`: snapshot `dragBase` từ trạng thái hiện tại (`dimBrightness ?? 1.0` cho bên trái; `video.muted ? 0 : video.volume` cho bên phải).
+  - Lúc `dragStart`: snapshot `dragBase` từ trạng thái hiện tại (`dimBrightness ?? 1.0` cho bên trái; `video.muted ? 0 : video.volume` cho bên phải). Setting `canVerticalDrag()` chỉ đọc tại `dragStart` — mode đã khóa thì sống hết cú kéo.
   - Trong suốt `dragMove`: nhận **tổng dịch chuyển `dy` tính từ anchor ban đầu** (`dy < 0` khi kéo lên, `dy > 0` khi kéo xuống) và tính giá trị thô **không clamp**:
     `raw = dragBase - dy / (h * 0.75)`
   - **Chỉ clamp khi áp dụng** lên DOM/audio (`clamp` chỉ ở bước output, **không** clamp `raw`), để người dùng kéo quá đỉnh/đáy rồi đảo chiều vẫn phản hồi đối xứng đúng quãng tay.
@@ -57,8 +58,8 @@ Hiện tại trong `recognizer.js`:
   - Giá trị nội bộ của session: `dimBrightness` (`null` = `AUTO`, hoặc số `0.10..0.99`). Khởi tạo mỗi session = `null` (`AUTO`) để không bao giờ kẹt màn hình tối sang video/phiên sau.
   - **Hysteresis 2 chiều quanh ngưỡng `AUTO`:**
     - Dải hoạt động Dim: `[0.10, 1.00)`. Nếu `raw >= 1.0` $\to$ `dimBrightness = null` (`AUTO ☀`, `layers.dim.style.opacity = '0'`).
-    - Khi đang ở chế độ Dim (`dimBrightness !== null`) và kéo xuống dưới đáy (`0.10`): chỉ chuyển sang `AUTO` khi vượt hysteresis đáy (`AUTO_HYSTERESIS_PX = 24`):
-      - Điều kiện **vào `AUTO`**: `(raw < 0.10 && (0.10 - raw) * h * 0.75 >= 24) || raw < 0.05` $\to$ `dimBrightness = null` (`AUTO ☀`, `opacity = '0'`).
+    - Khi đang ở chế độ Dim (`dimBrightness !== null`) và kéo xuống dưới đáy (`0.10`): chỉ chuyển sang `AUTO` khi vượt hysteresis đáy (`AUTO_HYSTERESIS_PX = 24`, kèm dung sai FP `0.5` tại biên — **H3**):
+      - Điều kiện **vào `AUTO`**: `(raw < 0.10 && (0.10 - raw) * h * 0.75 >= 24 - 0.5) || raw < 0.05` $\to$ `dimBrightness = null` (`AUTO ☀`, `opacity = '0'`).
     - Khi đang ở `AUTO` (do mới vào từ đáy trong **cùng cú kéo**) và kéo ngược lên: giữ `AUTO` cho tới khi qua ngưỡng thoát:
       - Điều kiện **thoát `AUTO`**: `raw >= 0.10 + 24 / (h * 0.75)` (xấp xỉ `0.14` tại `h = 800`) mới quay lại mức Dim tương ứng `clamp(raw, 0.10, 0.99)`.
     - Nếu bắt đầu một cú kéo **mới** từ `AUTO` (`dragBase = 1.0`): kéo lên (`raw >= 1.0`) giữ `AUTO ☀`; kéo xuống (`raw < 1.0`) giảm mượt `99% -> 10%`, kéo quá đáy lại vào `AUTO ☀`.
@@ -67,8 +68,9 @@ Hiện tại trong `recognizer.js`:
   - Snapshot `dragBase = video.muted ? 0 : video.volume` ở `dragStart`.
   - Khi kéo: `raw = dragBase - dy / (h * 0.75)`, áp `next = clamp(raw, 0, 1)`.
   - Áp lên `<video>`: `video.volume = next; video.muted = next === 0;`.
-  - **[EMPIRICAL — Patch G1]:** Đã xác nhận tại [`src/content/session.js:79-96`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/session.js#L79-L96) rằng `captureVideoState` lưu `volume: video.volume, isMuted: video.muted` và `restoreVideoState` (`session.js:94-95`) **có khôi phục** `video.volume = state.volume; video.muted = state.isMuted;` khi `exit()`. Vì vậy **bắt buộc** sửa `session.js`: khi user kết thúc kéo volume bên phải (`dragEnd`), cập nhật lại `state.volume = video.volume; state.isMuted = video.muted;` (qua callback `onVolumeCommit` từ `ui.js` $\to$ `session.js`) để `exit()` không rollback âm lượng mà user vừa chỉnh.
-  - **[EMPIRICAL — Patch G4 Confirmed]:** Probe §5.1 trên YouTube (`aircAruvnKk`) cho thấy set trực tiếp `video.volume` / `video.muted` bắn `volumechange` và không bị YouTube ghi đè ngược, **nhưng** `#movie_player.getVolume()` / `.ytp-volume-panel[aria-valuenow]` vẫn kẹt ở `100` / `isMuted: false`. Ngược lại gọi `#movie_player.setVolume(35)` đồng bộ cả `<video>` lẫn UI/store của YouTube (`videoVol: 0.35`, `ytVol: 35`, `ytBarAria: "35"`). Vì vậy **bổ sung** `op === 'setVolume'` trong `src/content/pageagent.js` (`setVolume` + `mute`/`unMute`, gọi ở `dragEnd` trong khi `dragMove` vẫn update trực tiếp `video.volume` tức thời 60fps).
+  - **[EMPIRICAL — Patch G1]:** Đã xác nhận tại [`src/content/session.js:79-96`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/session.js#L79-L96) rằng `captureVideoState` lưu `volume: video.volume, isMuted: video.muted` và `restoreVideoState` (`session.js:94-95`) **có khôi phục** `video.volume = state.volume; video.muted = state.isMuted;` khi `exit()`. Vì vậy **bắt buộc** sửa `session.js`: khi user kết thúc kéo volume bên phải (`dragEnd`), cập nhật lại `state.volume = video.volume; state.muted = video.muted;` (qua callback `onVolumeCommit` từ `ui.js` $\to$ `session.js`) để `exit()` không rollback âm lượng mà user vừa chỉnh.
+  - **[EMPIRICAL — Patch G4 Confirmed & Pipeline H2]:** Probe §5.1 trên YouTube (`aircAruvnKk`) cho thấy set trực tiếp `video.volume` / `video.muted` bắn `volumechange` và không bị YouTube ghi đè ngược, **nhưng** `#movie_player.getVolume()` / `.ytp-volume-panel[aria-valuenow]` vẫn kẹt ở `100` / `isMuted: false`. Ngược lại gọi `#movie_player.setVolume(35)` đồng bộ cả `<video>` lẫn UI/store của YouTube (`videoVol: 0.35`, `ytVol: 35`, `ytBarAria: "35"`). Mọi đường `dragEnd` (`pointerup`, `pointercancel`, `lostpointercapture`, `pinch`) phải chạy **cùng một pipeline**:
+    `reset mode` $\to$ `onVolumeCommit(video.volume, video.muted)` $\to$ bridge `{ op: 'setVolume', volume: Math.round(v * 100), muted }` $\to$ gỡ `.dim.is-dragging` (nếu bên trái) $\to$ HUD toast `900ms`. Trong `pageagent.js`: no-op nếu `state.host` không có `setVolume`; nếu có: `call(state.host, 'setVolume', vol)` + `muted ? call(state.host, 'mute') : call(state.host, 'unMute')`.
 
 ---
 
@@ -88,18 +90,20 @@ Hiện tại trong `recognizer.js`:
 
 ## 4. File dự kiến thay đổi
 
-| Action | File                                                                                                                 | Mô tả                                                                                                                                                |
-| ------ | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Modify | `src/lib/settings.js`                                                                                                | Thêm `isVerticalGesturesOn: false` vào `DEFAULTS`                                                                                                    |
-| Modify | `src/content/gestures/zones.js`                                                                                      | Giữ/xác nhận phân vùng `HOLD_LEFT` / `HOLD_RIGHT` cho vertical drag                                                                                  |
-| Modify | `src/content/gestures/recognizer.js`                                                                                 | Vertical drag ở `HOLD_LEFT`/`HOLD_RIGHT` khi `!canSwipe() && canVerticalDrag()`, phát anchor `dy`, lắng nghe `lostpointercapture` (G3)               |
-| Modify | `src/content/controls/menu.js`                                                                                       | Thêm toggle `"Vertical swipe (Dim / Volume)"` (v1 chỉ trong menu, default OFF)                                                                       |
-| Modify | `src/content/ui.js`                                                                                                  | Toán anchor `raw` + 2-way `AUTO` hysteresis, `layers.dim`, `video.volume`/`muted`, HUD `Dim:` / `Volume:`, gọi `onVolumeCommit` + bridge ở `dragEnd` |
-| Modify | `src/content/session.js`                                                                                             | Cập nhật `savedState.volume` / `savedState.isMuted` khi nhận `onVolumeCommit` để `restoreVideoState` không revert volume khi `exit()` (G1)           |
-| Modify | `src/content/pageagent.js`                                                                                           | Thêm `op: 'setVolume'` (`player.setVolume` + `mute`/`unMute`) để sync UI & volume store của YouTube ở `dragEnd` (G4 đã xác nhận cần thiết)           |
-| Modify | `src/content/player.css`                                                                                             | Tắt `transition` của `.dim` khi đang kéo (`.dim.is-dragging { transition: none; }`) để tránh lag 200ms theo kết quả Probe §5.2                       |
-| Modify | `test/unit/recognizer.test.js`, `test/unit/settings.test.js`, `test/unit/session.test.js` (hoặc unit test `ui`/math) | Unit test direction-lock, `lostpointercapture`/`pointercancel` (G3), `canSwipe()`, anchor math + 2-way hysteresis (G2), `restoreVideoState` (G1)     |
-| Modify | `README-edge.md`, `CHANGELOG.md`, `docs/changelogs/`                                                                 | Cập nhật tài liệu, giải thích cơ chế **Dim** (không phải backlight) và cộng dồn với Color Panel Brightness (C5, G5)                                  |
+| Action | File                                                                                                                 | Mô tả                                                                                                                                            |
+| ------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Modify | `src/lib/settings.js`                                                                                                | Thêm `isVerticalGesturesOn: false` vào `DEFAULTS`                                                                                                |
+| Modify | `src/content/gestures/zones.js`                                                                                      | Giữ/xác nhận phân vùng `HOLD_LEFT` / `HOLD_RIGHT` cho vertical drag                                                                              |
+| Modify | `src/content/gestures/recognizer.js`                                                                                 | Vertical drag ở `HOLD_LEFT`/`HOLD_RIGHT` khi `!canSwipe() && canVerticalDrag()`, phát anchor `dy`, lắng nghe `lostpointercapture` (G3, H1)       |
+| Create | `src/content/gestures/verticaldrag.js`                                                                               | Module thuần: anchor math + 2-way `AUTO` hysteresis + Dim/Volume controllers (tách khỏi `ui.js` để unit-test, D1)                                |
+| Modify | `src/content/controls/menu.js`                                                                                       | Thêm toggle `"Vertical swipe (Dim / Volume)"` (v1 chỉ trong menu, default OFF)                                                                   |
+| Modify | `src/content/ui.js`                                                                                                  | Nối `dragTargets`, `canVerticalDrag`, HUD `Dim:` / `Volume:`, `setChromeVisible` chỉ cho `ZONE.SEEK`, gọi `onVolumeCommit` + bridge ở `dragEnd`  |
+| Modify | `src/content/session.js`                                                                                             | Cập nhật `savedState.volume` / `savedState.isMuted` khi nhận `onVolumeCommit` để `restoreVideoState` không revert volume khi `exit()` (G1)       |
+| Modify | `src/content/page/bridge.js`                                                                                         | Thêm `setSiteVolume` — kênh `content -> page` cho `op: 'setVolume'` (H2, G4, D1)                                                                 |
+| Modify | `src/content/pageagent.js`                                                                                           | Thêm `op: 'setVolume'` (`player.setVolume` + `mute`/`unMute`) để sync UI & volume store của YouTube ở `dragEnd` (G4 đã xác nhận cần thiết)       |
+| Modify | `src/content/player.css`                                                                                             | Tắt `transition` của `.dim` khi đang kéo (`.dim.is-dragging { transition: none; }`) để tránh lag 200ms theo kết quả Probe §5.2                   |
+| Modify | `test/unit/recognizer.test.js`, `test/unit/settings.test.js`, `test/unit/session.test.js` (hoặc unit test `ui`/math) | Unit test direction-lock, `lostpointercapture`/`pointercancel` (G3), `canSwipe()`, anchor math + 2-way hysteresis (G2), `restoreVideoState` (G1) |
+| Modify | `README-edge.md`, `CHANGELOG.md`, `docs/changelogs/`                                                                 | Cập nhật tài liệu, giải thích cơ chế **Dim** (không phải backlight) và cộng dồn với Color Panel Brightness (C5, G5)                              |
 
 ---
 
@@ -127,7 +131,7 @@ Chạy thực tế trên Edge (`channel: 'msedge'`, `1280x800`, live `https://ww
 ## 6. Kiểm thử & Nghiệm thu (Stage 4)
 
 - **Unit (`npm test`):**
-  - `recognizer.test.js`: vertical drag trái/phải chỉ phát khi `!canSwipe() && canVerticalDrag()`; horizontal trên `HOLD_LEFT` vẫn bị bỏ qua (`ABANDONED`); pinch 2 ngón kết thúc vertical drag gọn; **`pointercancel` & `lostpointercapture` phát `dragEnd` không revert (G3)**.
+  - `recognizer.test.js`: vertical drag trái/phải chỉ phát khi `!canSwipe() && canVerticalDrag()`; horizontal trên `HOLD_LEFT` vẫn bị bỏ qua (`ABANDONED`); **idempotency H1 (3 case bắt buộc)**: (1) `pointerup + lostpointercapture` $\to$ `dragEnd` đúng 1 lần; (2) `pointercancel + lostpointercapture` $\to$ `dragEnd` đúng 1 lần; (3) pinch-start giữa drag $\to$ `dragEnd` đúng 1 lần.
   - `settings.test.js`: `isVerticalGesturesOn` mặc định `false`, chấp nhận boolean hợp lệ.
   - Anchor-based math + **2-way `AUTO` hysteresis** (kéo từ `AUTO` lên giữ `AUTO`, kéo xuống qua `0.10` + `24px` vào `AUTO`, kéo ngược lên qua `~0.14` mới thoát `AUTO`) & volume clamp `[0, 1]` (**G2**).
   - **`session.js` `restoreVideoState` (G1):** Xác nhận khi user chỉnh volume trong stage rồi `exit()`, volume mới **không bị revert** về volume lúc vào stage.

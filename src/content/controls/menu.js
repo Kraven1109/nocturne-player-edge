@@ -87,6 +87,8 @@ export const createMenu = ({
   onNotice,
   isIntroSkipOn,
   onIntroSkip,
+  isVerticalGesturesOn = false,
+  onVerticalGestures = () => {},
 }) => {
   const speedRow = buildChipRow('Speed');
   const setSpeed = paintChips(
@@ -124,6 +126,17 @@ export const createMenu = ({
     el('span', { class: 'menu-label', text: 'Intros' }),
     el('div', { class: 'menu-cells' }, [
       buildToggleCell('Offer to skip', isIntroSkipOn, onIntroSkip),
+    ]),
+  ]);
+
+  const gestureRow = el('div', { class: 'menu-row' }, [
+    el('span', { class: 'menu-label', text: 'Gestures' }),
+    el('div', { class: 'menu-cells' }, [
+      buildToggleCell(
+        'Vertical swipe (Dim / Volume)',
+        isVerticalGesturesOn,
+        onVerticalGestures,
+      ),
     ]),
   ]);
 
@@ -184,6 +197,7 @@ export const createMenu = ({
     speedRow.row,
     subtitleRow.row,
     introRow,
+    gestureRow,
   ]);
 
   // Both lists can grow while the film plays — a caption track switched on in

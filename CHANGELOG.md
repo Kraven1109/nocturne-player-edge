@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+### Added
+
+- Optional vertical edge swipe gestures (disabled by default, toggled via
+  **Gestures -> Vertical swipe (Dim / Volume)** in the player Settings menu):
+  left-edge frame dimming (`layers.dim`, `10%..99%` with 2-way `Dim: AUTO ☀`
+  bottom hysteresis) and right-edge `video.volume` / mute control with YouTube
+  player synchronization and exit-preservation.
+
 ### Changed
 
 - Fullscreen launcher badge now auto-hides (`opacity: 0; pointer-events: none`)
