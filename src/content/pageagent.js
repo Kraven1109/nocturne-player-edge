@@ -41,6 +41,7 @@ const ALLOWED_OPS = new Set([
   'playerjs.id',
   'seek',
   'setVolume',
+  'setLoop',
   'fullscreen.lock',
   'fullscreen.unlock',
 ]);
@@ -241,6 +242,16 @@ const handleVideoOp = (video, op, request) => {
     const clamped = Math.max(0, Math.min(100, Math.round(volume)));
     call(state.host, 'setVolume', clamped);
     call(state.host, muted ? 'mute' : 'unMute');
+    return true;
+  }
+
+  if (op === 'setLoop') {
+    const enabled = request.enabled;
+    if (typeof enabled !== 'boolean') return false;
+    if (state.host === null || !isFunction(state.host, 'setLoopVideo')) {
+      return false;
+    }
+    call(state.host, 'setLoopVideo', enabled);
     return true;
   }
 

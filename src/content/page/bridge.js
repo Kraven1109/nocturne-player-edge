@@ -117,6 +117,9 @@ export const setSiteVolume = (video, volume, muted) =>
     muted: Boolean(muted),
   }) === true;
 
+export const setSiteLoop = (video, enabled) =>
+  requestSync(video, 'setLoop', { enabled: Boolean(enabled) }) === true;
+
 export const lockFullscreen = () =>
   requestSync(document.documentElement, 'fullscreen.lock') === true;
 

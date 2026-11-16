@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Session-scoped **Playback -> Loop video** toggle via an injectable 1–N
+  `createLooper` facade (`src/content/video/loop.js`) with YouTube native
+  context-menu sync (`op: 'setLoop'`), automatic vertical-feed exclusion, exit
+  restoration (`session.js`), and silent `0x0` audio-only `.mp4` exclusion in
+  `detect.js`.
 - Support for direct `video/*` `MediaDocument` tabs (`http(s)://...mp4`,
   `webm`, and local `file://` video files when **Allow access to file URLs**
   is enabled in `edge://extensions`), with protocol-first filtering (`http:`,

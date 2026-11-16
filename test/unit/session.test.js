@@ -22,11 +22,13 @@ const createMockVideo = ({
   volume = 0.8,
   muted = false,
   controls = true,
+  loop = false,
 } = {}) => {
   let hasControls = controls;
   return {
     volume,
     muted,
+    loop,
     playbackRate: 1,
     style: { cssText: '' },
     parentNode: null,
@@ -78,4 +80,18 @@ test('restoreVideoState restores MediaDocument controls attribute [D2]', () => {
 
   restoreVideoState(withControls, state);
   assert.equal(withControls.hasAttribute('controls'), true);
+});
+
+test('restoreVideoState restores session-scoped loop property cleanly', () => {
+  const normalVideo = createMockVideo({ loop: false });
+  const stateA = captureVideoState(normalVideo);
+  normalVideo.loop = true;
+  restoreVideoState(normalVideo, stateA);
+  assert.equal(normalVideo.loop, false);
+
+  const loopedVideo = createMockVideo({ loop: true });
+  const stateB = captureVideoState(loopedVideo);
+  loopedVideo.loop = false;
+  restoreVideoState(loopedVideo, stateB);
+  assert.equal(loopedVideo.loop, true);
 });

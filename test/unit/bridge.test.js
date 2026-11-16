@@ -6,6 +6,7 @@ import {
   createBridgeAudioTracks,
   createBridgeQualityAdapter,
   requestSync,
+  setSiteLoop,
   setSiteVolume,
 } from '../../src/content/page/bridge.js';
 
@@ -187,4 +188,15 @@ test('setSiteVolume rounds 0..100 integer and sends muted flag', () => {
   assert.equal(requests[1].detail.muted, true);
 
   assert.equal(setSiteVolume(createMockElement(), 0.5, false), false);
+});
+
+test('setSiteLoop dispatches op setLoop with boolean enabled flag', () => {
+  const video = answering(true);
+  assert.equal(setSiteLoop(video, true), true);
+  assert.equal(setSiteLoop(video, 0), true);
+  const requests = video.dispatched.filter((e) => e.type === 'nocturne:req');
+  assert.equal(requests[0].detail.op, 'setLoop');
+  assert.equal(requests[0].detail.enabled, true);
+  assert.equal(requests[1].detail.enabled, false);
+  assert.equal(setSiteLoop(createMockElement(), true), false);
 });

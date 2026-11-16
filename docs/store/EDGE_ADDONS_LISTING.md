@@ -34,7 +34,7 @@ Key Features:
   - Double-tap left/right to jump ±10s; hold sides for 2x / stepped rewind.
   - Pinch to crop letterboxed black bars; swipe vertically on Shorts/Reels/TikTok feeds.
   - Optional Vertical Edge Gestures (turn on in Settings → Gestures): swipe left edge to dim video frames (10%–99% or drag past bottom for AUTO) and swipe right edge to adjust volume/mute.
-• Quality, Audio Track & Speed Picker: switch resolution and audio tracks on YouTube, hls.js, dash.js, Shaka Player, and Playerjs.
+• Quality, Audio Track, Speed & Loop Picker: switch resolution/audio tracks on YouTube, hls.js, dash.js, Shaka Player, and Playerjs, or toggle per-video loop in Settings.
 • Local Subtitles & Night Light: load .srt/.vtt subtitle files and tune night light warmth, brightness, contrast, and saturation.
 • Privacy First: runs 100% locally on your device. No analytics, no remote servers, unminified build.
 

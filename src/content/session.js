@@ -1,6 +1,6 @@
 import { createOverlay } from './ui.js';
 import { createShadowHost, el, pinStyle } from './shell.js';
-import { cacheHost } from './page/bridge.js';
+import { cacheHost, setSiteLoop } from './page/bridge.js';
 import { findFeedScroller, stepFeed, waitForNextVideo } from './video/feed.js';
 import { lockPageFullscreen } from './fullscreenlock.js';
 import playerCss from './player.css';
@@ -79,6 +79,7 @@ const VIDEO_STYLE_KEYS = Object.keys(VIDEO_STYLE).concat([
 export const captureVideoState = (video) => ({
   cssText: video.style.cssText,
   hasControlsAttribute: video.hasAttribute('controls'),
+  isLooped: Boolean(video.loop),
   playbackRate: video.playbackRate,
   volume: video.volume,
   isMuted: video.muted,
@@ -95,6 +96,7 @@ export const restoreVideoState = (video, state) => {
   video.style.cssText = state.cssText;
   if (state.hasControlsAttribute) video.setAttribute('controls', '');
   else video.removeAttribute('controls');
+  video.loop = Boolean(state.isLooped);
   video.playbackRate = state.playbackRate;
   video.volume = state.volume;
   video.muted = state.isMuted;
@@ -369,6 +371,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       styleGuard = null;
       overlay.destroy();
       restoreVideoState(video, state);
+      setSiteLoop(video, state.isLooped);
       if (anchor.isConnected) anchor.replaceWith(video);
       else video.remove();
       auditRestore(video, state);

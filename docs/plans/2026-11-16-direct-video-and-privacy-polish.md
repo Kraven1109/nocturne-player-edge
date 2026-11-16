@@ -1,7 +1,7 @@
 # Plan: Direct Video / Local File Support, Repo Privacy Cleanup & `.gitignore`
 
 **Date:** 2026-11-16  
-**Status:** Complete — Stage 3 & Stage 4 Verified  
+**Status:** Complete + Scope Clarified for Audio-Only `0x0` Guard (`3b3b292` + `detect.js` follow-up)  
 **Target Release:** `0.10.0`
 
 ---
@@ -12,6 +12,7 @@ Hoàn thiện 3 hạng mục cuối trước khi phát hành `0.10.0`, tách là
 
 1. **`chore(privacy)`:** Làm sạch toàn bộ dấu vết máy cục bộ trong `HEAD` + hoàn chỉnh `.gitignore` + hoàn tất batch release `0.10.0`.
 2. **`feat(detect)`:** Hỗ trợ direct video & file local (`file://...mp4` / `video/*` `MediaDocument`), bảo vệ audio (`D1`) và `controls` (`D2`), tinh gọn docs.
+   - **Phạm vi loại trừ 0.10.0 (Audio-only):** Không hỗ trợ `audio/*` `MediaDocument` (`<audio>`), và `.mp4` chỉ có audio (`video/*` nhưng `videoWidth === 0 || videoHeight === 0`) **phải degrade im lặng** (không hiện badge, 0 lỗi console). _(Probe phát hiện Edge cấp box `300x150 >= 200x150` cho `<video>` không hình -> bắt buộc chặn `videoWidth === 0 || videoHeight === 0` trong `isPlayable` của `detect.js` ở commit kế tiếp.)_
 
 ---
 

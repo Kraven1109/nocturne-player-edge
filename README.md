@@ -36,8 +36,9 @@ Works on any site that plays a standard `<video>`, direct video tabs (`http(s):/
 - **Touch & Gesture Controls** — double-tap sides to seek `±10s`, hold sides for
   `2x` / stepped rewind, pinch-to-zoom crop, and vertical feed swipe for Shorts
   / Reels / TikTok.
-- **Quality, Audio Track, Speed & Subtitles** — switch qualities/audio tracks on
-  supported engines or load local `.srt` / `.vtt` subtitle files.
+- **Quality, Audio Track, Speed, Loop & Subtitles** — switch qualities/audio
+  tracks on supported engines, toggle per-video **Loop video** in Settings
+  (non-feed videos only, restored on exit), or load `.srt` / `.vtt` subtitles.
 
 ## Privacy
 

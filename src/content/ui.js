@@ -16,6 +16,7 @@ import { createSeeker } from './video/seek.js';
 import { createSkipFeedback } from './controls/skipfeedback.js';
 import { createIntroSkip } from './controls/introskip.js';
 import { createIntroWatch } from './video/introwatch.js';
+import { createLooper, isLoopAllowedForVideo } from './video/loop.js';
 import { createTrackManager } from './video/tracks.js';
 import { createVisuals } from './video/visuals.js';
 import { el } from './shell.js';
@@ -258,6 +259,16 @@ export const createOverlay = ({
     onPersist({ [key]: value });
   });
 
+  const looper = createLooper(video, {
+    isAllowed: () =>
+      isLoopAllowedForVideo({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+      }),
+  });
+
   const menu = createMenu({
     video,
     tracks,
@@ -279,6 +290,7 @@ export const createOverlay = ({
       isVerticalGesturesOn = isOn;
       onPersist({ isVerticalGesturesOn: isOn });
     },
+    looper,
   });
 
   menuRef.setSubtitle = menu.setSubtitle;
@@ -760,6 +772,7 @@ export const createOverlay = ({
       introWatch.destroy();
       introSkip.destroy();
       tracks.destroy();
+      looper.destroy();
       stopHold();
       if (chromeTimer !== null) clearTimeout(chromeTimer);
       if (toastTimer !== null) clearTimeout(toastTimer);

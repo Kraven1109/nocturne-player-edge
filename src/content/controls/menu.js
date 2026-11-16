@@ -89,6 +89,7 @@ export const createMenu = ({
   onIntroSkip,
   isVerticalGesturesOn = false,
   onVerticalGestures = () => {},
+  looper = null,
 }) => {
   const speedRow = buildChipRow('Speed');
   const setSpeed = paintChips(
@@ -191,10 +192,25 @@ export const createMenu = ({
   // Quality leads. It is the row people open this sheet for, it is the longest,
   // and on a phone held sideways the sheet scrolls — so anything below the
   // first two rows is a row somebody has to go looking for.
+  const loopCell = buildToggleCell(
+    'Loop video',
+    looper ? looper.isLooping() : false,
+    (isOn) => {
+      if (!looper) return;
+      const actual = looper.set(isOn);
+      loopCell.setAttribute('aria-checked', String(Boolean(actual)));
+    },
+  );
+  const playbackRow = el('div', { class: 'menu-row' }, [
+    el('span', { class: 'menu-label', text: 'Playback' }),
+    el('div', { class: 'menu-cells' }, [loopCell]),
+  ]);
+
   const root = el('div', { class: 'panel menu' }, [
     qualityRow.row,
     audioRow.row,
     speedRow.row,
+    playbackRow,
     subtitleRow.row,
     introRow,
     gestureRow,
@@ -207,6 +223,11 @@ export const createMenu = ({
     paintSubtitles();
     paintQuality();
     audioRow.paint();
+    const isLoopVisible = looper !== null && looper.isAllowed();
+    playbackRow.classList.toggle('is-empty', !isLoopVisible);
+    if (isLoopVisible) {
+      loopCell.setAttribute('aria-checked', String(looper.isLooping()));
+    }
   };
 
   const open = () => {

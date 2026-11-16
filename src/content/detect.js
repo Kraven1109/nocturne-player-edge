@@ -21,13 +21,19 @@ const collectVideos = () => {
   return found;
 };
 
-const isPlayable = (video) => {
+export const isPlayable = (video) => {
   if (!video.isConnected) return false;
   const rect = video.getBoundingClientRect();
   if (rect.width < MIN_WIDTH || rect.height < MIN_HEIGHT) return false;
   const style = getComputedStyle(video);
   if (style.visibility === 'hidden' || style.display === 'none') return false;
   if (Number(style.opacity) === 0) return false;
+  if (
+    video.readyState >= HAVE_METADATA &&
+    (video.videoWidth === 0 || video.videoHeight === 0)
+  ) {
+    return false;
+  }
   return video.readyState >= HAVE_METADATA || video.currentSrc !== '';
 };
 
