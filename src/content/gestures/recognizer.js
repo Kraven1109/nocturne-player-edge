@@ -28,13 +28,24 @@ const distanceBetween = (first, second) => {
   return Math.hypot(dx, dy);
 };
 
+const midpointOf = (first, second) => ({
+  x: (first.x + second.x) / 2,
+  y: (first.y + second.y) / 2,
+  width: first.width,
+  height: first.height,
+});
+
 // `canSwipe` is asked at the moment a finger starts to travel, not once up
 // front: the phone may have been turned, or the feed moved on to a film of a
 // different shape, since the player opened.
 export const createRecognizer = (
   surface,
   handlers,
-  { canSwipe = () => false, canVerticalDrag = () => false } = {},
+  {
+    canSwipe = () => false,
+    canVerticalDrag = () => false,
+    canPan = () => false,
+  } = {},
 ) => {
   const pointers = new Map();
 
@@ -46,6 +57,7 @@ export const createRecognizer = (
   let tapCount = 0;
   let tapZone = ZONE.DEAD;
   let pinchStartDistance = 0;
+  let pinchLastMid = { x: 0, y: 0 };
   let isEnabled = true;
 
   const emit = (name, detail) => {
@@ -117,14 +129,21 @@ export const createRecognizer = (
     const prevMode = mode;
     const prevAxis = dragAxis;
     const points = Array.from(pointers.values());
+    const mid = midpointOf(points[0], points[1]);
     pinchStartDistance = distanceBetween(points[0], points[1]);
+    pinchLastMid = mid;
     mode = MODE.PINCH;
     dragAxis = 'horizontal';
     if (prevMode === MODE.DRAG) {
       emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
     }
     if (prevMode === MODE.HOLD) emit('holdEnd', { zone: anchor.zone });
-    emit('pinchStart', {});
+    emit('pinchStart', {
+      x: mid.x,
+      y: mid.y,
+      width: mid.width,
+      height: mid.height,
+    });
   };
 
   const handleDown = (event) => {
@@ -159,8 +178,20 @@ export const createRecognizer = (
     const points = Array.from(pointers.values());
     if (points.length < 2) return;
     const spread = distanceBetween(points[0], points[1]);
+    const mid = midpointOf(points[0], points[1]);
+    const dx = mid.x - pinchLastMid.x;
+    const dy = mid.y - pinchLastMid.y;
+    pinchLastMid = mid;
     if (pinchStartDistance === 0) return;
-    emit('pinchMove', { scale: spread / pinchStartDistance });
+    emit('pinchMove', {
+      scale: spread / pinchStartDistance,
+      dx,
+      dy,
+      x: mid.x,
+      y: mid.y,
+      width: mid.width,
+      height: mid.height,
+    });
   };
 
   const handleMove = (event) => {
@@ -181,19 +212,25 @@ export const createRecognizer = (
       const dy = point.y - anchor.y;
       if (Math.hypot(dx, dy) < MOVE_TOLERANCE_PX) return;
       clearHoldTimer();
-      // Checked before the zones: a flick up is the same gesture wherever on
-      // the picture it starts, the seek band and the side boxes included.
-      if (isVerticalMove(dx, dy) && canSwipe()) {
-        mode = MODE.SWIPE;
-        return;
+      if (canPan()) {
+        dragAxis = 'pan';
+      } else {
+        // Checked before the zones: a flick up is the same gesture wherever on
+        // the picture it starts, the seek band and the side boxes included.
+        if (isVerticalMove(dx, dy) && canSwipe()) {
+          mode = MODE.SWIPE;
+          return;
+        }
+        const isVerticalSideDrag =
+          isVerticalMove(dx, dy) &&
+          isHoldZone(anchor.zone) &&
+          canVerticalDrag();
+        if (!isVerticalSideDrag && !isDragZone(anchor.zone)) {
+          mode = MODE.ABANDONED;
+          return;
+        }
+        dragAxis = isVerticalSideDrag ? 'vertical' : 'horizontal';
       }
-      const isVerticalSideDrag =
-        isVerticalMove(dx, dy) && isHoldZone(anchor.zone) && canVerticalDrag();
-      if (!isVerticalSideDrag && !isDragZone(anchor.zone)) {
-        mode = MODE.ABANDONED;
-        return;
-      }
-      dragAxis = isVerticalSideDrag ? 'vertical' : 'horizontal';
       mode = MODE.DRAG;
       emit('dragStart', {
         zone: anchor.zone,

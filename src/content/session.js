@@ -23,12 +23,13 @@ const COMPACT_SCREEN_SHARE = 0.6;
 // the screen out, or a site that reached it before the lock did. Losing it
 // this close to a turn is not the user backing out.
 const TURN_GRACE_MS = 1500;
+const MAX_STABILIZE_MS = 600;
 
 const STAGE_STYLE = {
   position: 'fixed',
   inset: '0',
-  width: '100vw',
-  height: '100vh',
+  width: '100%',
+  height: '100%',
   margin: '0',
   padding: '0',
   border: '0',
@@ -39,6 +40,15 @@ const STAGE_STYLE = {
   background: '#000',
   'z-index': '2147483646',
 };
+
+const STAGE_CSS =
+  '[data-nocturne-player]:fullscreen,' +
+  '[data-nocturne-player]:-webkit-full-screen{' +
+  'position:fixed!important;inset:0!important;' +
+  'width:100%!important;height:100%!important;' +
+  'max-width:none!important;max-height:none!important;' +
+  'margin:0!important;padding:0!important;background:#000!important;}' +
+  '[data-nocturne-player]::backdrop{background:#000!important;}';
 
 // A site's own player keeps rewriting the video's inline style — YouTube sets
 // a pixel width, height and offset on every layout pass — which is what used to
@@ -131,15 +141,36 @@ const isSameStyle = (first, second) => {
   return VIDEO_STYLE_KEYS.every((name) => first[name] === second[name]);
 };
 
-// navigationUI is deliberately left at its default. Asking Gecko to hide it put
-// Android into sticky immersive mode, where the first swipe up only brings the
-// system bars back and a second one is needed to leave the app.
-const requestFullscreen = async (element) => {
-  if (!document.fullscreenEnabled) return false;
+// Request immersive fullscreen on Chromium/Edge Android while keeping default
+// Gecko fullscreen options on non-Chromium engines.
+export const requestFullscreen = async (
+  element,
+  doc = document,
+  isChromium = 'chrome' in globalThis,
+) => {
+  if (!doc.fullscreenEnabled) return false;
+  if (!isChromium) {
+    try {
+      await element.requestFullscreen();
+      return true;
+    } catch (error) {
+      console.warn('Nocturne: fullscreen refused', error);
+      return false;
+    }
+  }
   try {
-    await element.requestFullscreen();
+    await element.requestFullscreen({ navigationUI: 'hide' });
     return true;
   } catch (error) {
+    if (error instanceof TypeError) {
+      try {
+        await element.requestFullscreen();
+        return true;
+      } catch (fallbackError) {
+        console.warn('Nocturne: fullscreen refused', fallbackError);
+        return false;
+      }
+    }
     console.warn('Nocturne: fullscreen refused', error);
     return false;
   }
@@ -151,10 +182,17 @@ const requestFullscreen = async (element) => {
 // an app that has gone into the background is no longer the focused one.
 const isBackgrounded = () => document.hidden || !document.hasFocus();
 
-const readOrientation = () => {
-  const type = window.screen.orientation?.type;
+export const readOrientationAxis = (win = window) => {
+  const type = win.screen?.orientation?.type;
   if (type) return type.split('-')[0];
-  return window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
+  return win.innerWidth > win.innerHeight ? 'landscape' : 'portrait';
+};
+
+export const readOrientationState = (win = window) => {
+  const type = win.screen?.orientation?.type;
+  const angle = win.screen?.orientation?.angle ?? win.orientation ?? 0;
+  if (type) return `${type}:${angle}`;
+  return `${readOrientationAxis(win)}:${angle}`;
 };
 
 const isSmallerThanScreen = () => {
@@ -263,12 +301,20 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   let shown = null;
   let lastVideo = firstVideo;
   let relayoutFrame = 0;
+  let stabilizeFrame = 0;
+  let stabilizeStartAt = 0;
+  let stabilizeLastSize = null;
+  let stabilizeMatches = 0;
   let unlockPageFullscreen = () => {};
   let lastTurnAt = -Infinity;
-  let heldOrientation = readOrientation();
+  let heldOrientation = readOrientationState();
+
+  const isStageFullscreen = () =>
+    document.fullscreenElement === stage ||
+    document.fullscreenElement === ui.host;
 
   const readScreen = () => {
-    const isFullscreen = document.fullscreenElement === stage;
+    const isFullscreen = isStageFullscreen();
     return {
       isFullscreen,
       isCompact: !isFullscreen && isSmallerThanScreen(),
@@ -277,7 +323,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
 
   const isTurning = () =>
     performance.now() - lastTurnAt < TURN_GRACE_MS ||
-    readOrientation() !== heldOrientation;
+    readOrientationState() !== heldOrientation;
 
   const relayout = () => {
     relayoutFrame = 0;
@@ -289,9 +335,61 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     relayoutFrame = requestAnimationFrame(relayout);
   };
 
+  let stabilizeInitialSize = null;
+
+  const stopStabilize = () => {
+    if (stabilizeFrame !== 0) cancelAnimationFrame(stabilizeFrame);
+    stabilizeFrame = 0;
+    stabilizeInitialSize = null;
+    stabilizeLastSize = null;
+    stabilizeMatches = 0;
+  };
+
+  const stageSize = () => {
+    const rect = stage.getBoundingClientRect();
+    return {
+      key: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      nonZero: rect.width > 0 && rect.height > 0,
+    };
+  };
+
+  const stepStabilize = () => {
+    stabilizeFrame = 0;
+    if (!isActive) return;
+    relayout();
+    const { key: sizeKey, nonZero } = stageSize();
+    const hasChanged =
+      stabilizeInitialSize !== null && sizeKey !== stabilizeInitialSize;
+    if (nonZero && hasChanged && sizeKey === stabilizeLastSize) {
+      stabilizeMatches += 1;
+    } else {
+      stabilizeLastSize = sizeKey;
+      stabilizeMatches = 0;
+    }
+    const elapsed = performance.now() - stabilizeStartAt;
+    if (stabilizeMatches >= 3 || elapsed >= MAX_STABILIZE_MS) {
+      stopStabilize();
+      return;
+    }
+    stabilizeFrame = requestAnimationFrame(stepStabilize);
+  };
+
+  const startStabilizeRelayout = () => {
+    stopStabilize();
+    if (!isActive) return;
+    stabilizeInitialSize = stageSize().key;
+    stabilizeStartAt = performance.now();
+    stabilizeFrame = requestAnimationFrame(stepStabilize);
+  };
+
   // Late-bound: showing a video needs the way out and the way to the next
   // video, and both of those need to be able to show one.
-  const actions = { exit: () => {}, step: () => {}, fullscreen: () => {} };
+  const actions = {
+    exit: () => {},
+    step: () => {},
+    fullscreen: () => {},
+    rotate: () => {},
+  };
 
   // Takes one video out of the page, puts it on the stage with the controls
   // over it, and returns what is needed to hand it back exactly as it was.
@@ -357,6 +455,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
         commitCapturedVolume(state, volume, isMuted),
       onFeedStep: (direction) => actions.step(direction),
       onFullscreen: () => actions.fullscreen(),
+      onRotate: () => actions.rotate(),
       isChromeShown,
     });
     overlay.setScreen(readScreen());
@@ -382,6 +481,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       video,
       release,
       notify: (text) => overlay.notify(text),
+      rotateQuarter: () => overlay.rotateQuarter(),
+      resetRotation: () => overlay.resetRotation(),
       showControls: () => overlay.showControls(),
       relayout: () => {
         pin();
@@ -397,10 +498,17 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
 
     if (relayoutFrame !== 0) cancelAnimationFrame(relayoutFrame);
     relayoutFrame = 0;
+    stopStabilize();
     scope.dispose();
     unlockPageFullscreen();
 
-    if (document.fullscreenElement === stage) {
+    try {
+      window.screen.orientation?.unlock?.();
+    } catch {
+      // Orientation was never locked or unlock is unsupported.
+    }
+
+    if (isStageFullscreen()) {
       document.exitFullscreen().catch(() => {});
     }
 
@@ -446,19 +554,47 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   actions.exit = exit;
   actions.step = step;
   actions.fullscreen = () => {
-    requestFullscreen(stage).then(scheduleRelayout);
+    requestFullscreen(stage).then(startStabilizeRelayout);
+  };
+  actions.rotate = async () => {
+    const canLock =
+      isStageFullscreen() &&
+      typeof window.screen.orientation?.lock === 'function';
+    if (canLock) {
+      const current = readOrientationAxis();
+      const next = current === 'landscape' ? 'portrait' : 'landscape';
+      lastTurnAt = performance.now();
+      try {
+        await window.screen.orientation.lock(next);
+        heldOrientation = readOrientationState();
+        if (shown) {
+          shown.resetRotation();
+          shown.notify(next === 'landscape' ? 'Landscape' : 'Portrait');
+        }
+        startStabilizeRelayout();
+        return;
+      } catch {
+        // Desktop browsers or restricted frames reject orientation.lock.
+      }
+    }
+    if (!shown) return;
+    const degrees = shown.rotateQuarter();
+    shown.notify(degrees === 0 ? 'Rotation reset' : `Rotated ${degrees}°`);
   };
 
   const openStage = () => {
     stage.dataset.nocturnePlayer = '';
     pinStyle(stage, STAGE_STYLE);
-    stage.append(ui.host);
+    const stageStyle = document.createElement('style');
+    stageStyle.dataset.nocturneStageStyle = '';
+    stageStyle.textContent = STAGE_CSS;
+    stage.append(stageStyle, ui.host);
     ui.shadow.append(layers.warm, layers.dim, loader);
     document.body.append(stage);
   };
 
   const restoreFullscreen = () => {
-    if (document.fullscreenElement === stage) return;
+    if (isStageFullscreen()) return;
     // Gecko may refuse this without a fresh gesture. The stage covers the
     // viewport on its own, so the player stays usable either way.
     requestFullscreen(stage).then(scheduleRelayout);
@@ -467,7 +603,12 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   const watchForReturn = () => {
     const noteTurn = () => {
       lastTurnAt = performance.now();
-      scheduleRelayout();
+      const nextState = readOrientationState();
+      if (nextState !== heldOrientation) {
+        heldOrientation = nextState;
+        if (shown) shown.resetRotation();
+      }
+      startStabilizeRelayout();
     };
 
     // A turn keeps the player open, out of fullscreen, with its controls up:
@@ -475,15 +616,15 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     // screen back without a tap, so the player cannot take it back itself.
     scope.listen(document, 'fullscreenchange', () => {
       scheduleRelayout();
-      if (document.fullscreenElement === stage) {
-        heldOrientation = readOrientation();
+      if (isStageFullscreen()) {
+        heldOrientation = readOrientationState();
         return;
       }
       scope.later(() => {
         if (!isActive) return;
         if (isBackgrounded()) return;
         if (isTurning()) {
-          heldOrientation = readOrientation();
+          heldOrientation = readOrientationState();
           if (shown) shown.showControls();
           return;
         }
@@ -502,7 +643,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       }, RECOVER_DELAY_MS);
     });
 
-    scope.listen(window, 'resize', scheduleRelayout);
+    scope.listen(window, 'resize', startStabilizeRelayout);
+    if (window.visualViewport) {
+      scope.listen(window.visualViewport, 'resize', startStabilizeRelayout);
+    }
     scope.listen(window, 'orientationchange', noteTurn);
     if (window.screen.orientation) {
       scope.listen(window.screen.orientation, 'change', noteTurn);

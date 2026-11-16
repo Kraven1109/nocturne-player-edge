@@ -15,8 +15,14 @@ registerHooks({
   },
 });
 
-const { captureVideoState, commitCapturedVolume, restoreVideoState } =
-  await import('../../src/content/session.js');
+const {
+  captureVideoState,
+  commitCapturedVolume,
+  readOrientationAxis,
+  readOrientationState,
+  requestFullscreen,
+  restoreVideoState,
+} = await import('../../src/content/session.js');
 
 const createMockVideo = ({
   volume = 0.8,
@@ -94,4 +100,66 @@ test('restoreVideoState restores session-scoped loop property cleanly', () => {
   loopedVideo.loop = false;
   restoreVideoState(loopedVideo, stateB);
   assert.equal(loopedVideo.loop, true);
+});
+
+test('requestFullscreen passes navigationUI hide and falls back', async () => {
+  const calls = [];
+  const modern = {
+    requestFullscreen: async (opts) => {
+      calls.push(opts ?? null);
+    },
+  };
+  assert.equal(
+    await requestFullscreen(modern, { fullscreenEnabled: true }, true),
+    true,
+  );
+  assert.deepEqual(calls, [{ navigationUI: 'hide' }]);
+
+  const fallbackCalls = [];
+  const legacy = {
+    requestFullscreen: async (opts) => {
+      fallbackCalls.push(opts ?? null);
+      if (opts !== undefined) throw new TypeError('unsupported options');
+    },
+  };
+  assert.equal(
+    await requestFullscreen(legacy, { fullscreenEnabled: true }, true),
+    true,
+  );
+  assert.deepEqual(fallbackCalls, [{ navigationUI: 'hide' }, null]);
+
+  assert.equal(
+    await requestFullscreen(modern, { fullscreenEnabled: false }, true),
+    false,
+  );
+
+  const geckoCalls = [];
+  const gecko = {
+    requestFullscreen: async (opts) => {
+      geckoCalls.push(opts ?? null);
+    },
+  };
+  assert.equal(
+    await requestFullscreen(gecko, { fullscreenEnabled: true }, false),
+    true,
+  );
+  assert.deepEqual(geckoCalls, [null]);
+});
+
+test('readOrientationState distinguishes 180deg landscape flip', () => {
+  const landA = {
+    screen: { orientation: { type: 'landscape-primary', angle: 90 } },
+  };
+  const landB = {
+    screen: { orientation: { type: 'landscape-secondary', angle: 270 } },
+  };
+  assert.equal(readOrientationAxis(landA), 'landscape');
+  assert.equal(readOrientationAxis(landB), 'landscape');
+  assert.equal(readOrientationState(landA), 'landscape-primary:90');
+  assert.equal(readOrientationState(landB), 'landscape-secondary:270');
+  assert.notEqual(readOrientationState(landA), readOrientationState(landB));
+
+  const legacy = { innerWidth: 412, innerHeight: 915 };
+  assert.equal(readOrientationAxis(legacy), 'portrait');
+  assert.equal(readOrientationState(legacy), 'portrait:0');
 });

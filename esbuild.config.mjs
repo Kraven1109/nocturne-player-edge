@@ -20,6 +20,8 @@ const staticAssets = [
   { from: `${SOURCE_DIR}/icons`, to: `${OUTPUT_DIR}/icons` },
   { from: `${SOURCE_DIR}/popup/popup.html`, to: `${OUTPUT_DIR}/popup.html` },
   { from: `${SOURCE_DIR}/popup/popup.css`, to: `${OUTPUT_DIR}/popup.css` },
+  { from: `${SOURCE_DIR}/local/local.html`, to: `${OUTPUT_DIR}/local.html` },
+  { from: `${SOURCE_DIR}/local/local.css`, to: `${OUTPUT_DIR}/local.css` },
 ];
 
 const bundles = [
@@ -31,6 +33,11 @@ const bundles = [
   {
     entry: `${SOURCE_DIR}/popup/popup.js`,
     out: `${OUTPUT_DIR}/popup.js`,
+    banner: BROWSER_SHIM,
+  },
+  {
+    entry: `${SOURCE_DIR}/local/local.js`,
+    out: `${OUTPUT_DIR}/local.js`,
     banner: BROWSER_SHIM,
   },
   {

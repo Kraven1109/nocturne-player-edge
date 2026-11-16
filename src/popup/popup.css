@@ -124,3 +124,13 @@ button {
 button:hover {
   border-color: var(--accent);
 }
+
+.action-card {
+  padding: 8px;
+}
+
+.primary-button {
+  width: 100%;
+  font-weight: 600;
+  border-color: var(--line);
+}

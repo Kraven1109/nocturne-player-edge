@@ -27,17 +27,24 @@ const originOf = (url, baseHref) => {
   }
 };
 
+const LOCAL_PROTOCOLS = new Set(['file:', 'content:', 'chrome-extension:']);
+
+const isLocalSource = (url) =>
+  url.startsWith('file:') ||
+  url.startsWith('content:') ||
+  url.startsWith('chrome-extension:');
+
 // The browser hands Web Audio silence from a video it fetched from another
 // site without permission — and the viewer would hear that silence too, since
-// the sound now goes through the graph. Local file:// URLs also yield silence in
-// Chromium Web Audio, so file: bypasses createMediaElementSource up front.
+// the sound now goes through the graph. Local file/content/extension URLs also
+// bypass createMediaElementSource up front.
 export const canListen = (
   video,
   pageLocation = typeof location !== 'undefined' ? location : null,
 ) => {
   const source = video.currentSrc;
   if (source === '' || video.srcObject) return false;
-  if (pageLocation?.protocol === 'file:' || source.startsWith('file:')) {
+  if (LOCAL_PROTOCOLS.has(pageLocation?.protocol) || isLocalSource(source)) {
     return false;
   }
   const baseHref = pageLocation?.href;

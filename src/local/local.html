@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Nocturne Local Player</title>
+    <link rel="stylesheet" href="local.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <img class="logo" src="icons/icon.svg" alt="" width="36" height="36" />
+        <div>
+          <h1>Nocturne Local Player</h1>
+          <p class="subtitle">Offline playback — no files leave your device.</p>
+        </div>
+      </header>
+
+      <section class="card controls">
+        <label class="pick-button" for="file-input">Choose video file</label>
+        <input id="file-input" type="file" accept="video/*" hidden />
+        <button type="button" id="reopen" class="reopen-button" hidden>
+          Open in Nocturne
+        </button>
+      </section>
+
+      <p id="status" class="status">
+        Select a video from your device, then open Settings in Nocturne to load
+        .srt or .vtt subtitles.
+      </p>
+
+      <div class="stage-box" id="stage-box" hidden>
+        <video id="video" controls playsinline></video>
+      </div>
+    </main>
+
+    <script src="local.js"></script>
+  </body>
+</html>

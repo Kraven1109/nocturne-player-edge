@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+## [0.11.0] - 2026-11-16
+
+### Added
+
+- Built-in offline local video launcher page (`local.html`, accessible via
+  **Open local video** in the toolbar popup) so local files on Android Edge play
+  reliably inside Nocturne even where Chromium restricts content-script
+  injection on `content://` URIs, with automatic object-URL revocation on
+  `pagehide` and silent rejection of audio-only files.
+- First-class `content:` protocol handling in `detect.js`, `introwatch.js`
+  (Web Audio bypass matching `file:`), and `popup.js`.
+- Quick **Rotate** button in the fullscreen `.topbar` (`ui.js`): tries
+  `screen.orientation.lock` when fullscreen (automatically resetting CSS
+  rotation and updating orientation state on lock, and calling `unlock()` on
+  `exit()`), falling back to quarter-turn CSS video rotation
+  (`0° → 90° → 180° → 270° → 0°`). *(Note: OS orientation lock path is
+  implemented behind `screen.orientation.lock` and awaiting real Android Edge
+  hardware test; desktop Edge falls back to CSS rotation.)*
+- **Focal-anchored pinch zoom (up to `4x`) & 2D 1-finger pan** (`zoom.js`,
+  `visuals.js`, `recognizer.js`): arbitrary zoom levels past fit and cover now
+  persist cleanly after lifting fingers (`snapPinchScale`), panning stays
+  clamped to rotated screen-space picture bounds (`computeDrawSize` +
+  `clampPan`) so black margins never appear, rotation changes re-clamp zoom
+  scale and pan bounds, and 1-finger dragging while zoomed pans smoothly across
+  any frame region.
+
+### Changed
+
+- Applied web-layer fullscreen fixes (`session.js`): replaced fixed
+  `100vw`/`100vh` stage inline styles with `100%` + scoped `:fullscreen` and
+  `::backdrop` black backdrop rules, gated `{ navigationUI: 'hide' }` to
+  Chromium builds with `TypeError` fallback, tightened 180° sensor flip
+  detection (`readOrientationState`), and replaced single-frame relayout with a
+  dimension-change-gated `rAF` + `visualViewport.resize` stabilize loop. *(Note:
+  on Android devices where a top bar is drawn by Edge's native Custom Tab
+  View outside web DOM, device testing is still pending; use **Popup → Open
+  local video** as the guaranteed path.)*
+- Short-circuited `bridge.js` on `chrome-extension:` pages so `local.html` runs
+  cleanly without dispatching page-world bridge requests.
+
 ## [0.10.0] - 2026-11-16
 
 Initial public release of **Nocturne Player for Edge** (Manifest V3), forked from

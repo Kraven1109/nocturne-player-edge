@@ -139,7 +139,7 @@ export const createVideoWatcher = (onPrimaryChange) => {
   };
 };
 
-const SUPPORTED_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
+const SUPPORTED_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'content:']);
 
 export const isMediaDocumentSupported = (contentType, protocol) => {
   if (!SUPPORTED_PROTOCOLS.has(protocol)) return false;
@@ -148,4 +148,4 @@ export const isMediaDocumentSupported = (contentType, protocol) => {
 };
 
 export const resolveHostKey = (protocol, host) =>
-  protocol === 'file:' ? 'file:' : host;
+  protocol === 'file:' || protocol === 'content:' ? protocol : host;

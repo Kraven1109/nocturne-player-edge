@@ -1,0 +1,111 @@
+:root {
+  color-scheme: dark;
+  --bg: #111116;
+  --fg: #ececf4;
+  --muted: #9898a8;
+  --card: #1b1b24;
+  --line: #2e2e3c;
+  --accent: #a596ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+}
+
+.shell {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 16px 32px;
+}
+
+.header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.logo {
+  border-radius: 10px;
+  flex: none;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.pick-button,
+.reopen-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pick-button {
+  background: var(--accent);
+  color: #14121d;
+}
+
+.reopen-button {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--fg);
+}
+
+.status {
+  margin: 12px 2px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.stage-box {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+}
+
+video {
+  width: 100%;
+  max-height: 65vh;
+  display: block;
+  background: #000;
+}

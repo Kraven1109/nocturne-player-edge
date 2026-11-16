@@ -200,3 +200,15 @@ test('setSiteLoop dispatches op setLoop with boolean enabled flag', () => {
   assert.equal(requests[1].detail.enabled, false);
   assert.equal(setSiteLoop(createMockElement(), true), false);
 });
+
+test('requestSync skips dispatch on chrome-extension: pages [N3]', () => {
+  const prevLocation = globalThis.location;
+  globalThis.location = { protocol: 'chrome-extension:' };
+  try {
+    const video = createMockElement();
+    assert.equal(requestSync(video, 'setVolume', { volume: 50 }), null);
+    assert.equal(video.dispatched.length, 0);
+  } finally {
+    globalThis.location = prevLocation;
+  }
+});

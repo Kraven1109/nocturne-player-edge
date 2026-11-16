@@ -14,6 +14,12 @@ const PAGE_OPS = new Set(['fullscreen.lock', 'fullscreen.unlock']);
 let nextRequestId = 0;
 
 export const requestSync = (target, op, fields = {}) => {
+  if (
+    typeof location !== 'undefined' &&
+    location.protocol === 'chrome-extension:'
+  ) {
+    return null;
+  }
   const isPageOp = PAGE_OPS.has(op);
   const node = isPageOp ? document.documentElement : target;
 

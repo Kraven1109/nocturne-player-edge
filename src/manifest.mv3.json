@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nocturne Player for Edge",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Touch-first video player: thick seek bar, gestures, quality/subtitle picker, frame dimming, volume swipe and colour tuning.",
   "minimum_chrome_version": "111",
   "author": "Vlad Pohorilets (upstream), Nocturne Edge Contributors",

@@ -1,6 +1,6 @@
 {
   "name": "nocturne-player-edge",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "A touch-first video player for Microsoft Edge and Chromium browsers (port of Nocturne Player)",
   "license": "MPL-2.0",

@@ -42,6 +42,8 @@ const setUp = (options = {}) => {
       dragMove: record('dragMove'),
       dragEnd: record('dragEnd'),
       pinchStart: record('pinchStart'),
+      pinchMove: record('pinchMove'),
+      pinchEnd: record('pinchEnd'),
       swipe: record('swipe'),
     },
     options,
@@ -215,5 +217,63 @@ test('dragEnd idempotency H1: pinchStart mid-drag -> once', () => {
   surface.fire('lostpointercapture', 0.2, 0.5, 2);
   assert.equal(events.filter((e) => e.name === 'dragEnd').length, 1);
   assert.equal(events.filter((e) => e.name === 'pinchStart').length, 1);
+  mock.timers.reset();
+});
+
+test('canPan prioritizes 1-finger pan across zones over swipe/seek', () => {
+  for (const [x, y] of [
+    [0.5, 0.5],
+    [0.2, 0.5],
+    [0.8, 0.8],
+  ]) {
+    const { events, surface } = setUp({
+      canPan: () => true,
+      canSwipe: () => true,
+      canVerticalDrag: () => true,
+    });
+    surface.fire('pointerdown', x, y);
+    surface.fire('pointermove', x + 0.05, y + 0.05);
+    surface.fire('pointerup', x + 0.05, y + 0.05);
+    assert.deepEqual(
+      events.map((e) => [e.name, e.axis]),
+      [
+        ['dragStart', 'pan'],
+        ['dragMove', 'pan'],
+        ['dragEnd', 'pan'],
+      ],
+    );
+    mock.timers.reset();
+  }
+});
+
+test('pan preserves H1 idempotency and H2 lock + pinch emits midpoint', () => {
+  let panEnabled = true;
+  const h2 = setUp({ canPan: () => panEnabled });
+  h2.surface.fire('pointerdown', 0.5, 0.5, 1);
+  h2.surface.fire('pointermove', 0.55, 0.5, 1);
+  panEnabled = false;
+  h2.surface.fire('pointermove', 0.6, 0.5, 1);
+  h2.surface.fire('pointercancel', 0.6, 0.5, 1);
+  h2.surface.fire('lostpointercapture', 0.6, 0.5, 1);
+  assert.deepEqual(
+    h2.events.map((e) => [e.name, e.axis]),
+    [
+      ['dragStart', 'pan'],
+      ['dragMove', 'pan'],
+      ['dragMove', 'pan'],
+      ['dragEnd', 'pan'],
+    ],
+  );
+  mock.timers.reset();
+
+  const pinch = setUp({ canPan: () => true });
+  pinch.surface.fire('pointerdown', 0.4, 0.5, 1);
+  pinch.surface.fire('pointerdown', 0.6, 0.5, 2);
+  pinch.surface.fire('pointermove', 0.35, 0.5, 1);
+  pinch.surface.fire('pointermove', 0.65, 0.5, 2);
+  const moves = pinch.events.filter((e) => e.name === 'pinchMove');
+  assert.equal(moves.length, 2);
+  assert.ok(moves[1].scale > 1);
+  assert.equal(Math.round(moves[0].dx + moves[1].dx), 0);
   mock.timers.reset();
 });

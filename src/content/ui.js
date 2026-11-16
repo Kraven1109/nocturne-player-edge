@@ -77,6 +77,7 @@ const buildGearPath = () => {
 const ICON = {
   exit: 'M6 6l12 12M18 6L6 18',
   chevron: 'M7 10l5 5 5-5',
+  rotate: 'M21 12a9 9 0 1 1-3-6.7L21 8m0-5v5h-5',
   palette:
     'M12 3c-5 0-9 3.7-9 8.4 0 4.9 4 8.6 8.7 8.6 1.4 0 2.1-.9 2.1-1.9 ' +
     '0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8H16 ' +
@@ -161,6 +162,7 @@ export const createOverlay = ({
   onVolumeCommit = () => {},
   onFeedStep,
   onFullscreen,
+  onRotate = () => {},
   isChromeShown = true,
 }) => {
   const surface = el('div', { class: 'layer surface' });
@@ -179,6 +181,7 @@ export const createOverlay = ({
   // to things created after them.
   const buttons = {
     exit: null,
+    rotate: null,
     colour: null,
     menu: null,
     playlist: null,
@@ -454,6 +457,8 @@ export const createOverlay = ({
 
   const canVerticalDrag = () => isVerticalGesturesOn && !isPanelOpen();
 
+  const canPan = () => !isPanelOpen() && visuals.canPan();
+
   const recognizer = createRecognizer(
     surface,
     {
@@ -486,19 +491,48 @@ export const createOverlay = ({
       },
       holdEnd: () => stopHold(),
       dragStart: (detail) => {
+        if (detail.axis === 'pan') {
+          visuals.beginPan();
+          return;
+        }
         if (detail.zone === ZONE.SEEK) setChromeVisible(true);
         dragTargets[detail.zone]?.start(detail);
       },
-      dragMove: (detail) => dragTargets[detail.zone]?.move(detail),
-      dragEnd: (detail) => dragTargets[detail.zone]?.end(detail),
+      dragMove: (detail) => {
+        if (detail.axis === 'pan') {
+          visuals.panBy(detail.dx, detail.dy);
+          return;
+        }
+        dragTargets[detail.zone]?.move(detail);
+      },
+      dragEnd: (detail) => {
+        if (detail.axis === 'pan') {
+          visuals.endPan();
+          return;
+        }
+        dragTargets[detail.zone]?.end(detail);
+      },
       pinchStart: () => {
         pinchBase = visuals.beginPinch();
       },
-      pinchMove: ({ scale }) => visuals.pinchTo(pinchBase * scale),
+      pinchMove: (detail) => {
+        const focalX = Number.isFinite(detail.x)
+          ? detail.x - detail.width / 2
+          : 0;
+        const focalY = Number.isFinite(detail.y)
+          ? detail.y - detail.height / 2
+          : 0;
+        visuals.pinchTo(pinchBase * detail.scale, {
+          focalX,
+          focalY,
+          dx: detail.dx ?? 0,
+          dy: detail.dy ?? 0,
+        });
+      },
       pinchEnd: () => visuals.endPinch(),
       swipe: ({ direction }) => onFeedStep(direction),
     },
-    { canSwipe, canVerticalDrag },
+    { canSwipe, canVerticalDrag, canPan },
   );
 
   buttons.play = buildButton(
@@ -586,6 +620,11 @@ export const createOverlay = ({
   };
   playlistRef.refresh();
 
+  buttons.rotate = buildButton('Rotate', ICON.rotate, () => {
+    onRotate();
+    setChromeVisible(true);
+  });
+
   buttons.exit = buildButton('Exit player', ICON.exit, () => onExit());
   buttons.fullscreen = buildButton('Fullscreen', ICON.fullscreen, () => {
     onFullscreen();
@@ -595,6 +634,7 @@ export const createOverlay = ({
   const fullOnly = [
     buttons.exit,
     buttons.playlist,
+    buttons.rotate,
     buttons.colour,
     buttons.menu,
   ];
@@ -605,6 +645,7 @@ export const createOverlay = ({
     buttons.exit,
     buttons.playlist,
     el('div', { class: 'spacer' }),
+    buttons.rotate,
     buttons.colour,
     buttons.menu,
     buttons.fullscreen,
@@ -759,11 +800,14 @@ export const createOverlay = ({
   return {
     relayout: () => visuals.relayout(),
     repin: () => visuals.repin(),
+    rotateQuarter: () => visuals.rotateQuarter(),
+    resetRotation: () => visuals.resetRotation(),
     notify: (text) => showToast(text, HINT_MS),
     setScreen,
     showControls: () => setChromeVisible(true),
     destroy: () => {
       for (const node of roots) node.remove();
+      visuals.endPan();
       volumeDrag.end();
       dimDrag.reset();
       recognizer.destroy();

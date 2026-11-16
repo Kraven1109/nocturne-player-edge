@@ -44,6 +44,9 @@ const validate = async () => {
       `Missing popup: ${manifest.action.default_popup}`,
     );
   }
+  for (const rel of ['local.html', 'local.css', 'local.js']) {
+    assert.ok(existsSync(join(DIST_DIR, rel)), `Missing local asset: ${rel}`);
+  }
 
   let hasMainWorldAgent = false;
   for (const entry of manifest.content_scripts ?? []) {

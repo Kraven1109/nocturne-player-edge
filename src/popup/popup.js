@@ -10,6 +10,7 @@ const hostLabel = document.getElementById('site-host');
 const enabledToggle = document.getElementById('site-enabled');
 const statusLine = document.getElementById('status');
 const resetButton = document.getElementById('reset');
+const openLocalButton = document.getElementById('open-local');
 
 const readActiveTab = async () => {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -26,6 +27,9 @@ const readHost = (tab) => {
     if (url.protocol === 'file:') {
       return { key: 'file:', label: 'Local files (file://)' };
     }
+    if (url.protocol === 'content:') {
+      return { key: 'content:', label: 'Local media (content://)' };
+    }
     return null;
   } catch (error) {
     console.error('Nocturne: unreadable tab url', error);
@@ -35,6 +39,9 @@ const readHost = (tab) => {
 
 const describeVideo = async (tab, host) => {
   if (!tab) return 'No page to inspect.';
+  if (tab.url?.startsWith(browser.runtime.getURL('local.html'))) {
+    return 'Using built-in offline video player.';
+  }
   try {
     const state = await browser.tabs.sendMessage(tab.id, {
       type: 'query-state',
@@ -45,6 +52,9 @@ const describeVideo = async (tab, host) => {
     }
     return 'No video detected on this page yet.';
   } catch {
+    if (host?.key === 'content:') {
+      return 'Edge Android blocks scripts on content:// — use Open local video.';
+    }
     if (host?.key === 'file:') {
       return 'Not active — allow file URLs in edge://extensions.';
     }
@@ -77,8 +87,18 @@ const render = async () => {
 resetButton.addEventListener('click', async () => {
   await resetSettings();
   await clearIntroStore();
-  await render();
+  await openLocalButton.addEventListener('click', () => {
+    browser.tabs.create({ url: browser.runtime.getURL('local.html') });
+    window.close();
+  });
+
+  render();
   statusLine.textContent = 'Settings and learned intros reset.';
+});
+
+openLocalButton.addEventListener('click', () => {
+  browser.tabs.create({ url: browser.runtime.getURL('local.html') });
+  window.close();
 });
 
 render();

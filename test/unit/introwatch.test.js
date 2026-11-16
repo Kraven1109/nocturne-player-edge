@@ -15,7 +15,7 @@ const HTTP_LOC = {
   href: 'http://127.0.0.1:8422/film.html',
 };
 
-test('canListen bypasses file:// URLs to prevent WebAudio silence [D1]', () => {
+test('canListen bypasses file:, content:, and chrome-extension: [D1]', () => {
   const fileVideo = {
     currentSrc: 'file:///videos/episode.mp4',
     srcObject: null,
@@ -24,6 +24,30 @@ test('canListen bypasses file:// URLs to prevent WebAudio silence [D1]', () => {
   assert.equal(canListen(fileVideo, FILE_LOC), false);
   const withCors = { ...fileVideo, crossOrigin: 'anonymous' };
   assert.equal(canListen(withCors, FILE_LOC), false);
+
+  const contentLoc = {
+    protocol: 'content:',
+    origin: 'null',
+    href: 'content://media/external/downloads/100',
+  };
+  const contentVideo = {
+    currentSrc: 'content://media/external/downloads/100',
+    srcObject: null,
+    crossOrigin: null,
+  };
+  assert.equal(canListen(contentVideo, contentLoc), false);
+
+  const extLoc = {
+    protocol: 'chrome-extension:',
+    origin: 'chrome-extension://abcdefghijklmnop',
+    href: 'chrome-extension://abcdefghijklmnop/local.html',
+  };
+  const blobInExt = {
+    currentSrc: 'blob:chrome-extension://abcdefghijklmnop/123',
+    srcObject: null,
+    crossOrigin: null,
+  };
+  assert.equal(canListen(blobInExt, extLoc), false);
 });
 
 test('canListen allows same-origin or CORS HTTP media only', () => {
