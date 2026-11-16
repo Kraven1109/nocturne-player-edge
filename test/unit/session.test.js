@@ -16,6 +16,7 @@ registerHooks({
 });
 
 const {
+  applyBlackThemeColor,
   captureVideoState,
   commitCapturedVolume,
   readOrientationAxis,
@@ -162,4 +163,51 @@ test('readOrientationState distinguishes 180deg landscape flip', () => {
   const legacy = { innerWidth: 412, innerHeight: 915 };
   assert.equal(readOrientationAxis(legacy), 'portrait');
   assert.equal(readOrientationState(legacy), 'portrait:0');
+});
+
+const createMockMeta = (initialContent = null) => {
+  const attrs = new Map();
+  if (initialContent !== null) attrs.set('content', initialContent);
+  return {
+    isConnected: true,
+    hasAttribute: (k) => attrs.has(k),
+    getAttribute: (k) => attrs.get(k) ?? null,
+    setAttribute: (k, v) => attrs.set(k, String(v)),
+    removeAttribute: (k) => attrs.delete(k),
+    remove() {
+      this.isConnected = false;
+    },
+  };
+};
+
+test('applyBlackThemeColor sets/restores meta cleanly without clobber', () => {
+  const existing = createMockMeta('#ffffff');
+  const spaMeta = createMockMeta('#112233');
+  const docWithMeta = {
+    querySelectorAll: () => [existing, spaMeta],
+    head: null,
+  };
+  const restore = applyBlackThemeColor(docWithMeta);
+  assert.equal(existing.getAttribute('content'), '#000000');
+  assert.equal(spaMeta.getAttribute('content'), '#000000');
+
+  // Simulate SPA overwriting its meta mid-session; restore must not clobber it.
+  spaMeta.setAttribute('content', '#445566');
+  restore();
+  assert.equal(existing.getAttribute('content'), '#ffffff');
+  assert.equal(spaMeta.getAttribute('content'), '#445566');
+
+  const inserted = [];
+  const docWithoutMeta = {
+    querySelectorAll: () => [],
+    head: { prepend: (node) => inserted.push(node) },
+    createElement: () => createMockMeta(),
+  };
+  const restoreCreated = applyBlackThemeColor(docWithoutMeta);
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].getAttribute('name'), 'theme-color');
+  assert.equal(inserted[0].getAttribute('content'), '#000000');
+  assert.equal(inserted[0].isConnected, true);
+  restoreCreated();
+  assert.equal(inserted[0].isConnected, false);
 });

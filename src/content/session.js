@@ -48,7 +48,47 @@ const STAGE_CSS =
   'width:100%!important;height:100%!important;' +
   'max-width:none!important;max-height:none!important;' +
   'margin:0!important;padding:0!important;background:#000!important;}' +
-  '[data-nocturne-player]::backdrop{background:#000!important;}';
+  '[data-nocturne-player]::backdrop{background:#000!important;}' +
+  'html:has([data-nocturne-player]),' +
+  'body:has([data-nocturne-player]){' +
+  'background:#000!important;color-scheme:dark!important;}';
+
+// Hints Chromium/Edge Android's TopUiThemeColorProvider to tint any top bar
+// strip pure #000000 while open, without mutating layout viewport metadata
+// or overwriting an SPA update made during the session.
+export const applyBlackThemeColor = (doc = document) => {
+  const nodes = Array.from(
+    doc.querySelectorAll?.('meta[name="theme-color" i]') ?? [],
+  );
+  const snapshots = nodes.map((node) => ({
+    node,
+    hadContent: node.hasAttribute('content'),
+    content: node.getAttribute('content'),
+  }));
+  for (const { node } of snapshots) {
+    node.setAttribute('content', '#000000');
+  }
+
+  let created = null;
+  if (snapshots.length === 0 && doc.head) {
+    created = doc.createElement('meta');
+    created.setAttribute('name', 'theme-color');
+    created.setAttribute('content', '#000000');
+    created.setAttribute('data-nocturne-theme', '');
+    doc.head.prepend(created);
+  }
+
+  return () => {
+    if (created?.isConnected) created.remove();
+    created = null;
+    for (const snap of snapshots) {
+      if (!snap.node.isConnected) continue;
+      if (snap.node.getAttribute('content') !== '#000000') continue;
+      if (snap.hadContent) snap.node.setAttribute('content', snap.content);
+      else snap.node.removeAttribute('content');
+    }
+  };
+};
 
 // A site's own player keeps rewriting the video's inline style — YouTube sets
 // a pixel width, height and offset on every layout pass — which is what used to
@@ -306,6 +346,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   let stabilizeLastSize = null;
   let stabilizeMatches = 0;
   let unlockPageFullscreen = () => {};
+  let restoreThemeColor = () => {};
   let lastTurnAt = -Infinity;
   let heldOrientation = readOrientationState();
 
@@ -501,6 +542,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     stopStabilize();
     scope.dispose();
     unlockPageFullscreen();
+    restoreThemeColor();
+    restoreThemeColor = () => {};
 
     try {
       window.screen.orientation?.unlock?.();
@@ -583,6 +626,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   };
 
   const openStage = () => {
+    restoreThemeColor = applyBlackThemeColor();
     stage.dataset.nocturnePlayer = '';
     pinStyle(stage, STAGE_STYLE);
     const stageStyle = document.createElement('style');
