@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+## [0.10.0] - 2026-11-16
+
 ### Added
 
+- New **Eclipse Halo** vector icon suite (`src/icons/icon.svg`, PNG
+  `16`/`32`/`48`/`128`, plus `docs/store/tile-300.png` via `npm run icons`).
+- MV3 package validator (`npm run validate:mv3`) checking manifest, icons,
+  and `world: "MAIN"` isolation rules in CI and release workflows.
+- Community & Edge Add-ons Store kit: `NOTICE` (MPL-2.0 attribution), updated
+  `README.md`, `CONTRIBUTING.md`, `PRIVACY.md`, `SECURITY.md`, `.github/` issue
+  templates, and [`docs/store/EDGE_ADDONS_LISTING.md`](docs/store/EDGE_ADDONS_LISTING.md).
 - Optional vertical edge swipe gestures (disabled by default, toggled via
   **Gestures -> Vertical swipe (Dim / Volume)** in the player Settings menu):
   left-edge frame dimming (`layers.dim`, `10%..99%` with 2-way `Dim: AUTO ☀`
@@ -17,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Branded extension as **Nocturne Player for Edge** (`0.10.0`) across
+  `src/manifest.mv3.json`, `package.json`, and `src/popup/popup.html`, with all
+  source/issue links pointing to `Kraven1109/nocturne-player-edge`.
+- Replaced Firefox `web-ext lint` in GitHub CI/Release workflows with
+  `npm run validate:mv3` + `npm run package`, and fixed `tools/check-privacy.mjs`
+  to validate `src/manifest.mv3.json`.
 - Fullscreen launcher badge now auto-hides (`opacity: 0; pointer-events: none`)
   after 2s while a video is playing and reveals on pointer activity inside the
   video, keyboard focus, or pause — so it never blocks the picture or steals

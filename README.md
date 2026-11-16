@@ -1,113 +1,80 @@
-[![CI](https://github.com/kvachikk/nocturne-player/actions/workflows/ci.yml/badge.svg)](https://github.com/kvachikk/nocturne-player/actions/workflows/ci.yml)
+# Nocturne Player for Edge
+
+[![CI](https://github.com/Kraven1109/nocturne-player-edge/actions/workflows/ci.yml/badge.svg)](https://github.com/Kraven1109/nocturne-player-edge/actions/workflows/ci.yml)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 [![No data collected](https://img.shields.io/badge/data%20collected-none-brightgreen.svg)](PRIVACY.md)
 
-### Default browser player:
+**Nocturne Player for Edge** is a touch-first, zero-telemetry HTML5 video player
+extension for **Microsoft Edge** and Chromium MV3 browsers (`111+`).
 
-<img width="2856" height="1280" alt="default" src="https://github.com/user-attachments/assets/971f9017-4d59-406a-bff8-cce5e8c96229" />
+It is an independent Chromium Manifest V3 port and continuation of
+**[kvachikk/nocturne-player](https://github.com/kvachikk/nocturne-player)**
+by Vlad Pohorilets (upstream `v0.9.1`, commit `0de5804`, licensed under MPL-2.0).
 
-### This Player:
+Works on any site that plays a standard `<video>`, and integrates directly with
+YouTube (desktop and mobile `m.youtube.com`), `hls.js`, `dash.js`, Shaka
+Player, and Playerjs.
 
-<img width="2560" height="1147" alt="image" src="https://github.com/user-attachments/assets/739d01a8-7592-43e8-a7ba-e8ce2950718a" />
+## Features
 
-<img width="2560" height="1147" alt="image" src="https://github.com/user-attachments/assets/bb180257-44ac-4c46-a0e8-94551d936327" />
-
-<img width="2560" height="1147" alt="image" src="https://github.com/user-attachments/assets/fd545609-f1e6-4d7f-895a-353c924992e9" />
-
-Works on any site that plays a plain `<video>`, and on YouTube.
-
-## Key features
-
-### Skip intro
-
-The player learns a series' opening by ear and offers to skip it — no
-internet, no database of shows, nothing to set up.
-
-- **Episode 1** — it listens.
-- **Episode 2** — it hears the stretch that sounds the same as the episode
-  before, and paints it on the seek bar as it plays.
-- **From episode 3** — **Skip intro** comes up a second into the opening,
-  wherever the opening falls, and lands where the story starts.
-
-A new opening mid-season is learned the same way. Only a coarse spectrum of
-the sound is kept, on the device, with no address or title, and the listening
-can be switched off in the settings sheet.
-
-### Colour
-
-The palette button tunes the picture: **brightness**, **contrast**,
-**saturation**, and a warm **night light** for watching in the dark. The
-choice is remembered for the next film.
-
-## Everything else
-
-- **Seek bar** — thick, grab it anywhere; drag away from it to scrub slower.
-- **Double-tap** the right side for +10 s, the left for −10 s. Keep tapping to
-  go further.
-- **Hold** the right side for 2x, the left to rewind.
-- **Tap** shows or hides the controls. Only the play button pauses.
-- **Pinch** to fill the screen and crop black bars.
-- **Swipe** up or down through TikTok / Reels / Shorts feeds.
-- **Follows the phone** — portrait or landscape, turning mid-film included.
-- **Quality, audio track, speed, subtitles** (site tracks or your own
-  `.srt` / `.vtt`) in the settings sheet.
-- **Seasons and episodes** picker, and chapter marks on the seek bar.
+- **Smart Auto-Hide Launcher Badge** — stays visible when paused, auto-hides
+  (`opacity: 0; pointer-events: none`) after 2s while playing so it never
+  obscures the picture or intercepts clicks, and reveals on pointer activity or
+  keyboard focus.
+- **Direct Main-Video Scrubbing** — thick, precision seek bar that previews
+  frames directly on the main `<video>` (seeked-gated, zero hidden preload
+  videos) with chapter markers across YouTube SPA navigation.
+- **Optional Vertical Edge Gestures** _(enable in **Settings → Gestures →
+  Vertical swipe (Dim / Volume)**)_:
+  - **Left edge:** Video-frame overlay dimming (`10%..99%`, or swipe past the
+    bottom threshold for `Dim: AUTO ☀`). Uses the in-player overlay rather than
+    OS/hardware backlight.
+  - **Right edge:** Smooth volume/mute swipe synced with site players on
+    release and preserved when exiting Nocturne.
+- **Skip Intro** — learns series openings locally by coarse 33-band audio
+  spectra across episodes with zero internet access or databases.
+- **Colour & Night Light** — hardware-safe warm night-light tint plus brightness,
+  contrast, and saturation sliders.
+- **Touch & Gesture Controls** — double-tap sides to seek `±10s`, hold sides for
+  `2x` / stepped rewind, pinch-to-zoom crop, and vertical feed swipe for Shorts
+  / Reels / TikTok.
+- **Quality, Audio Track, Speed & Subtitles** — switch qualities/audio tracks on
+  supported engines or load local `.srt` / `.vtt` subtitle files.
 
 ## Privacy
 
-- Permissions: `storage` (your settings, on the device) and `activeTab`.
-- No `fetch`, no `XMLHttpRequest`, no remote URLs — a CI check enforces it.
-- Nothing is collected or sent. Works offline. The build is not minified.
-- Skip intro keeps coarse spectra of what it heard, on the device, with no
-  address or title; no sound can be rebuilt from them.
-- It runs on all sites only to find the `<video>`; you can turn it off per
-  site in the popup.
+- Requests only `storage` (local on-device preferences) and `activeTab` (popup
+  per-site toggle).
+- Zero `fetch`, `XMLHttpRequest`, beacons, `eval`, or remote URLs — enforced by
+  `npm run lint:privacy` in CI.
+- Built output (`dist/`) is unminified so anyone can inspect what runs.
 
-See [PRIVACY.md](PRIVACY.md).
+See [PRIVACY.md](PRIVACY.md) and [README-edge.md](README-edge.md) for full
+technical details.
 
-## Limitations
-
-- **Quality** works with `<source>` lists, YouTube, hls.js, dash.js, Shaka and
-  Playerjs. Elsewhere the row shows what is playing.
-- **Rewind** is stepped seeking — browsers cannot play backwards.
-- **Volume** stays on the phone's buttons; the web has no access to it.
-- **Saving a frame** is impossible: Firefox for Android does not let any
-  script read a video frame.
-- **Skip intro** needs two episodes to learn an opening and offers to skip it
-  from the third. It listens only to a video the site serves itself (most
-  players, YouTube included); a film loaded from another domain is left
-  alone, since the browser would silence it.
-
-## Install
-
-From [addons.mozilla.org](https://addons.mozilla.org). Needs Firefox for
-Android 142+ (desktop 140+).
-
-## Development
+## Install (Development / Unpacked)
 
 ```bash
 npm ci
-npm run lint      # eslint, prettier, web-ext lint, privacy check
-npm test
-npm run build     # dist/
-npm run package   # artifacts/nocturne_player-<version>.zip
+npm run build
 ```
 
-On a phone (enable **Remote debugging via USB** in Firefox's developer
-settings first):
+Load `dist/` via `edge://extensions` (enable **Developer mode** → **Load
+unpacked**), or build an installable archive with `npm run package`
+(`artifacts/nocturne-edge.zip`).
+
+## Development & Verification
 
 ```bash
-npm run fixture && npm run serve &
-adb reverse tcp:8422 tcp:8422
-npm run start:android   # then open http://localhost:8422/
+npm run lint          # ESLint + Prettier + MV3 privacy scan
+npm test              # Node unit test suite
+npm run build:clean   # Fresh MV3 bundles into dist/
+npm run validate:mv3  # Validate MV3 manifest, icons, and MAIN/ISOLATED rules
+npm run test:e2e      # Playwright E2E suite on Microsoft Edge
+npm run package       # Package dist/ -> artifacts/nocturne-edge.zip
 ```
 
-- Don't run `build:clean` while `web-ext run` is active — it stops the session.
-- After a rebuild, reload the page on the phone to get the new content script.
+## License & Attribution
 
-`npm audit` warnings come from `web-ext`, a dev-only dependency; nothing from
-`node_modules` ships.
-
-## License
-
-[MPL-2.0](LICENSE)
+Licensed under [MPL-2.0](LICENSE). See [NOTICE](NOTICE) for upstream credit and
+edge-port modifications.

@@ -1,6 +1,6 @@
 # Port Nocturne Player: Firefox/Gecko → Microsoft Edge (Chromium MV3)
 
-Target host: Microsoft Edge trên CachyOS (đã xác nhận **Edge 156.0.4314.50**), cài bằng **Load unpacked**.
+Target host: Microsoft Edge trên Linux/Windows (xác nhận từ **Edge 156+**), cài bằng **Load unpacked**.
 Nguồn: `kvachikk/nocturne-player` **v0.9.1** (commit `0de5804`), license **MPL-2.0**.
 Thư mục làm việc: `nocturne-player-edge/` (đã vendor source, xem Phase 0).
 

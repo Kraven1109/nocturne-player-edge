@@ -22,9 +22,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build:clean
-      - run: npx web-ext build -s dist -a artifacts --overwrite-dest
+      - run: npm run validate:mv3
+      - run: npm run package
 
-      # Published so anyone can rebuild and compare against the signed add-on.
+      # Published so anyone can rebuild and compare against the Edge Store release.
       - name: Checksum
         run: |
           cd artifacts

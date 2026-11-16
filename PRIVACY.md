@@ -16,10 +16,12 @@ Nothing. The extension has no network access whatsoever.
 
 ## What is stored
 
-Your settings — night light intensity, colour adjustments, dim level, subtitle
-appearance, playback preferences, and the list of sites you disabled the player
-on. These are written with the WebExtension `storage.local` API, which keeps
-them **on your device**.
+Your settings — night light intensity, colour adjustments, subtitle
+appearance, playback preferences (including optional vertical swipe gestures),
+and the list of sites you disabled the player on. These are written with the
+WebExtension `storage.local` API, which keeps them **on your device**. Session
+frame dimming (`Dim`) is not persisted and resets to `AUTO` when leaving the
+player.
 
 For **Skip intro**, the player also keeps what it learned about openings: a
 coarse picture of the sound — how loud each of 33 pitch bands was, five times
@@ -31,7 +33,7 @@ in the player's settings sheet to stop the listening; **Reset settings** in the
 popup erases what was learned.
 
 The extension deliberately does **not** use `storage.sync`, because that would
-copy your settings through a Mozilla account. Uninstalling the extension removes
+copy your settings through a browser account. Uninstalling the extension removes
 everything it stored.
 
 ## Permissions
@@ -53,15 +55,15 @@ You can disable the extension on any individual site from its popup.
 
 ## How to verify this
 
-1. **Read the manifest.** `src/manifest.json` is under forty lines and lists
-   every permission the extension can ever have.
+1. **Read the manifest.** `src/manifest.mv3.json` is under forty-five lines and
+   lists every permission the extension can ever have.
 2. **Run the privacy check.** `npm run lint:privacy` scans the source for
    `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `eval`,
    `storage.sync`, device-sensor APIs, analytics SDK names and remote URLs, and
    fails the build if any appear. It runs in CI on every commit.
-3. **Read the shipped code.** The published build is not minified. The file in
-   the add-on is readable JavaScript.
-4. **Watch the network.** Open `about:debugging`, inspect the extension, and
+3. **Read the shipped code.** The published build is not minified. The files in
+   the add-on are readable JavaScript (`content.js`, `pageagent.js`, `popup.js`).
+4. **Watch the network.** Open `edge://extensions`, inspect the extension, and
    look at the Network tab. It stays empty.
 
 ## Third parties
@@ -77,4 +79,4 @@ Git history of this file.
 ## Contact
 
 Open an issue at
-<https://github.com/kvachikk/nocturne-player/issues>.
+<https://github.com/Kraven1109/nocturne-player-edge/issues>.

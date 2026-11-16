@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 const SOURCE_DIR = 'src';
-const MANIFEST_PATH = 'src/manifest.json';
+const MANIFEST_PATH = 'src/manifest.mv3.json';
 const SCANNED_EXTENSIONS = ['.js', '.mjs', '.html', '.css'];
 
 // Nothing in this extension may reach the network or read device sensors.

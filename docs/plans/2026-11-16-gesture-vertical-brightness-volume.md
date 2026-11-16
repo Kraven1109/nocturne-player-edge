@@ -13,7 +13,7 @@ Cho phép người dùng **tùy chọn bật** (mặc định `OFF`) cử chỉ 
 - **Nửa phải (kéo lên/xuống):** Tăng / giảm âm lượng (`video.volume` `0..1`, tại `0` đặt `video.muted = true`), có HUD `%` và icon mute.
 - **Nửa trái (kéo lên/xuống):** Tăng / giảm độ sáng **khung hình video bằng lớp phủ Dim** (không phải đèn nền phần cứng):
   - **Giới hạn Web/Extension API:** Trình duyệt và MV3 extension **không có quyền** chỉnh đèn nền (backlight) hệ thống hay đọc cảm biến ánh sáng mặc định (`AmbientLightSensor`).
-  - **Cơ chế áp dụng:** Tận dụng chính phần tử **`layers.dim`** đã có sẵn trong [`session.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/session.js#L446) & [`player.css`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/player.css#L42-L46) (`div.layer.dim`, nền `#000`, đặt giữa `<video>` và toàn bộ controls/HUD trong Shadow DOM — `ui.shadow.append(layers.warm, layers.dim, loader)`).
+  - **Cơ chế áp dụng:** Tận dụng chính phần tử **`layers.dim`** đã có sẵn trong [`session.js`](../../src/content/session.js#L446) & [`player.css`](../../src/content/player.css#L42-L46) (`div.layer.dim`, nền `#000`, đặt giữa `<video>` và toàn bộ controls/HUD trong Shadow DOM — `ui.shadow.append(layers.warm, layers.dim, loader)`).
   - **[EMPIRICAL — Patch G5c]:** `grep -rn "\.dim\b" src/` chỉ trả về đúng 2 vị trí (`src/content/player.css:42` và `src/content/session.js:446`); `layers.dim` hiện chưa được sử dụng bởi module nào khác nên không có xung đột sở hữu. (Lưu ý `player.css:45` hiện đặt `transition: opacity 200ms ease;` — sẽ kiểm tra ở Probe §5.2 và tắt transition khi đang kéo tích cực nếu cần.)
     - `AUTO` = `layers.dim.style.opacity = '0'` (gỡ lớp làm tối, độ sáng hoàn toàn theo hệ thống).
     - `10%..99%` = `opacity = clamp(1 - level, 0.01, 0.90)` (không bao giờ kéo xuống `1.0` đen kịt mất đường nhìn).
@@ -24,7 +24,7 @@ Cho phép người dùng **tùy chọn bật** (mặc định `OFF`) cử chỉ 
 
 ## 2. Tích hợp vào hệ thống Gesture sẵn có (`recognizer.js`, `zones.js`, `ui.js`)
 
-Đối chiếu code thật của [`recognizer.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/gestures/recognizer.js#L160-L204) và [`zones.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/gestures/zones.js#L1-L36):
+Đối chiếu code thật của [`recognizer.js`](../../src/content/gestures/recognizer.js#L160-L204) và [`zones.js`](../../src/content/gestures/zones.js#L1-L36):
 
 ### 2.1. Phân xử xung đột với các gesture hiện tại
 
@@ -68,7 +68,7 @@ Hiện tại trong `recognizer.js`:
   - Snapshot `dragBase = video.muted ? 0 : video.volume` ở `dragStart`.
   - Khi kéo: `raw = dragBase - dy / (h * 0.75)`, áp `next = clamp(raw, 0, 1)`.
   - Áp lên `<video>`: `video.volume = next; video.muted = next === 0;`.
-  - **[EMPIRICAL — Patch G1]:** Đã xác nhận tại [`src/content/session.js:79-96`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/session.js#L79-L96) rằng `captureVideoState` lưu `volume: video.volume, isMuted: video.muted` và `restoreVideoState` (`session.js:94-95`) **có khôi phục** `video.volume = state.volume; video.muted = state.isMuted;` khi `exit()`. Vì vậy **bắt buộc** sửa `session.js`: khi user kết thúc kéo volume bên phải (`dragEnd`), cập nhật lại `state.volume = video.volume; state.muted = video.muted;` (qua callback `onVolumeCommit` từ `ui.js` $\to$ `session.js`) để `exit()` không rollback âm lượng mà user vừa chỉnh.
+  - **[EMPIRICAL — Patch G1]:** Đã xác nhận tại [`src/content/session.js:79-96`](../../src/content/session.js#L79-L96) rằng `captureVideoState` lưu `volume: video.volume, isMuted: video.muted` và `restoreVideoState` (`session.js:94-95`) **có khôi phục** `video.volume = state.volume; video.muted = state.isMuted;` khi `exit()`. Vì vậy **bắt buộc** sửa `session.js`: khi user kết thúc kéo volume bên phải (`dragEnd`), cập nhật lại `state.volume = video.volume; state.muted = video.muted;` (qua callback `onVolumeCommit` từ `ui.js` $\to$ `session.js`) để `exit()` không rollback âm lượng mà user vừa chỉnh.
   - **[EMPIRICAL — Patch G4 Confirmed & Pipeline H2]:** Probe §5.1 trên YouTube (`aircAruvnKk`) cho thấy set trực tiếp `video.volume` / `video.muted` bắn `volumechange` và không bị YouTube ghi đè ngược, **nhưng** `#movie_player.getVolume()` / `.ytp-volume-panel[aria-valuenow]` vẫn kẹt ở `100` / `isMuted: false`. Ngược lại gọi `#movie_player.setVolume(35)` đồng bộ cả `<video>` lẫn UI/store của YouTube (`videoVol: 0.35`, `ytVol: 35`, `ytBarAria: "35"`). Mọi đường `dragEnd` (`pointerup`, `pointercancel`, `lostpointercapture`, `pinch`) phải chạy **cùng một pipeline**:
     `reset mode` $\to$ `onVolumeCommit(video.volume, video.muted)` $\to$ bridge `{ op: 'setVolume', volume: Math.round(v * 100), muted }` $\to$ gỡ `.dim.is-dragging` (nếu bên trái) $\to$ HUD toast `900ms`. Trong `pageagent.js`: no-op nếu `state.host` không có `setVolume`; nếu có: `call(state.host, 'setVolume', vol)` + `muted ? call(state.host, 'mute') : call(state.host, 'unMute')`.
 
@@ -76,10 +76,10 @@ Hiện tại trong `recognizer.js`:
 
 ## 3. Tùy chọn người dùng (Settings & UI) — [Patch G5]
 
-- Trong [`src/lib/settings.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/lib/settings.js):
+- Trong [`src/lib/settings.js`](../../src/lib/settings.js):
   - Thêm key vào `DEFAULTS`: `isVerticalGesturesOn: false` (default `OFF`, `normalize()` tự nhận key mới mà không cần phá schema v2).
 - Nơi bật/tắt cho user (v1 — **chỉ đặt trong Settings menu**, không sửa `popup.html`):
-  - Thêm switch **"Vertical swipe (Dim / Volume)"** trong **Settings menu** ([`src/content/controls/menu.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/controls/menu.js), lưu qua `onPersist({ isVerticalGesturesOn })`).
+  - Thêm switch **"Vertical swipe (Dim / Volume)"** trong **Settings menu** ([`src/content/controls/menu.js`](../../src/content/controls/menu.js), lưu qua `onPersist({ isVerticalGesturesOn })`).
   - Trong `ui.js`, truyền `canVerticalDrag: () => isVerticalGesturesOn` vào `createRecognizer` (cập nhật động ngay khi gạt switch).
 - HUD hiển thị khi kéo:
   - Dùng lại `.toast` (`showToast(...)` ở `ui.js:229`, duration `null` trong lúc kéo, tự ẩn sau `TOAST_MS = 900` khi `dragEnd`):

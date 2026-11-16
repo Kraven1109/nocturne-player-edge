@@ -9,12 +9,12 @@
 
 ### 1.1. Tại sao click lên seekbar không jump tới vị trí mong muốn?
 
-1. Trong [`src/content/player.css:235`](file:///DATA1/quang_dev/BorderlessFullscreen_Rust/nocturne-player-edge/src/content/player.css#L235), `.seekbar` đang đặt `pointer-events: none;`. Mọi thao tác chuột/chạm đều rơi xuống lớp `.surface` của [`src/content/gestures/recognizer.js`](file:///DATA1/quang_dev/BorderlessFullscreen_Rust/nocturne-player-edge/src/content/gestures/recognizer.js).
+1. Trong [`src/content/player.css:235`](../../src/content/player.css#L235), `.seekbar` đang đặt `pointer-events: none;`. Mọi thao tác chuột/chạm đều rơi xuống lớp `.surface` của [`src/content/gestures/recognizer.js`](../../src/content/gestures/recognizer.js).
 2. Trong `recognizer.js:173-189`:
    - Chỉ khi kéo (drag) vượt quá ngưỡng `MOVE_TOLERANCE_PX = 12` trong vùng `ZONE.SEEK` (`y` từ `72%` đến `88%` chiều cao màn hình) thì sự kiện `dragStart` / `dragMove` mới được phát ra.
    - Khi người dùng **click** (hoặc chạm nhả tại chỗ `< 12px`) lên thanh seekbar, `mode` giữ nguyên là `MODE.PENDING` và khi nhả chuột (`pointerup`), `recognizer.js:228` gọi `registerTap(anchor.zone, anchor)`.
-   - Trong [`src/content/ui.js:413-419`](file:///DATA1/quang_dev/BorderlessFullscreen_Rust/nocturne-player-edge/src/content/ui.js#L413-L419), sự kiện `tap` chỉ gọi `setChromeVisible(...)` (ẩn/hiện thanh điều khiển) chứ **không hề thực hiện seek**.
-3. Ngay cả khi bắt đầu kéo (`seekBar.start()` tại [`src/content/controls/seekbar.js:106-112`](file:///DATA1/quang_dev/BorderlessFullscreen_Rust/nocturne-player-edge/src/content/controls/seekbar.js#L106-L112)), `scrubTime` khởi tạo bằng `video.currentTime` (tính độ lệch tương đối `dx`), không nhảy tới vị trí ngang `x` trên `.seek-track`.
+   - Trong [`src/content/ui.js:413-419`](../../src/content/ui.js#L413-L419), sự kiện `tap` chỉ gọi `setChromeVisible(...)` (ẩn/hiện thanh điều khiển) chứ **không hề thực hiện seek**.
+3. Ngay cả khi bắt đầu kéo (`seekBar.start()` tại [`src/content/controls/seekbar.js:106-112`](../../src/content/controls/seekbar.js#L106-L112)), `scrubTime` khởi tạo bằng `video.currentTime` (tính độ lệch tương đối `dx`), không nhảy tới vị trí ngang `x` trên `.seek-track`.
 
 ### 1.2. Tại sao chưa có Thumbnail khi seek?
 

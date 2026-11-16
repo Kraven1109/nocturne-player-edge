@@ -20,13 +20,13 @@ Khắc phục 2 điểm bất tiện UI/UX được phản ánh khi sử dụng 
 ### 2.1. Multi-video trên cùng một webpage
 
 - Toàn trang (trong một frame) chỉ khởi tạo **duy nhất 1 instance `badge`** (`src/content/index.js:47`).
-- [`createVideoWatcher`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/detect.js#L72-L134) quét các `<video>` hợp lệ (`isPlayable`: `rect >= 200x150`, không bị ẩn, `readyState >= HAVE_METADATA || currentSrc !== ''`) và chọn **duy nhất 1 `primary` video** theo điểm:
+- [`createVideoWatcher`](../../src/content/detect.js#L72-L134) quét các `<video>` hợp lệ (`isPlayable`: `rect >= 200x150`, không bị ẩn, `readyState >= HAVE_METADATA || currentSrc !== ''`) và chọn **duy nhất 1 `primary` video** theo điểm:
   $$\text{score} = \text{visibleArea}(rect) \times (\text{paused} ? 1 : 3) \times (\text{readyState} \ge 1 ? 1.5 : 1)$$
 - Khi có nhiều video trên trang:
   - Video đang play có trọng số `3×` nên **thường** trở thành `primary` khi các video có diện tích hiển thị tương đương (lưu ý: `score` vẫn nhân `visibleArea`, nên một video lớn đang pause vẫn thắng video nhỏ đang play).
   - Khi user cuộn sang video khác hoặc bấm play một video khác, `watcher` bắn `onPrimaryChange(nextVideo)` $\to$ `badge.show(nextVideo)`.
   - Trong Smart Badge mới, `badge.js` phải **gỡ listener `play`/`pause` khỏi `target` cũ và gắn sang `target` mới** mỗi khi `show(video)` đổi đối tượng, đồng thời tính lại trạng thái ẩn/hiện theo `target.paused`.
-  - Khi đã bấm mở Nocturne, [`session.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/session.js) chỉ lấy duy nhất `firstVideo` đưa lên `stage`; các `<video>` khác không bị chạm tới.
+  - Khi đã bấm mở Nocturne, [`session.js`](../../src/content/session.js) chỉ lấy duy nhất `firstVideo` đưa lên `stage`; các `<video>` khác không bị chạm tới.
 
 ### 2.2. Ai quản lý việc load dữ liệu video? Extension hay Trình duyệt?
 
@@ -174,7 +174,7 @@ Khắc phục 2 điểm bất tiện UI/UX được phản ánh khi sử dụng 
 - Probe thực nghiệm trên Edge 156 + `youtube.com` (`_scratch/probe_yt_scrub_paused.mjs`, `_scratch/probe_yt_seek_modes.mjs`, `_scratch/probe_yt_rapid_true.mjs`) cho thấy:
   - `player.seekTo(seconds, false)` (`isFinal = false`) trên YouTube **KHÔNG hề di chuyển `<video>.currentTime`** (đứng yên ở `0.021` kể cả trong vùng đã buffer `[0, 20s]`), **không bắn `seeked`**, và tự pause video nếu đang play.
   - Ngược lại, khi `<video>` đã `pause()`, gọi `player.seekTo(seconds, true)` (hoặc gán `video.currentTime` trong vùng buffer): cập nhật ngay `currentTime`, bắn `seeked` sau **5–124ms**, giữ nguyên `paused === true`, không xé bỏ phần tử `<video>` (`emptied === 0, sameEl === true`).
-- Vì vậy, để preview trực tiếp lên video chính hoạt động cả trên **YouTube**, trong [`pageagent.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/pageagent.js#L216-L222) (`op === 'seek'`):
+- Vì vậy, để preview trực tiếp lên video chính hoạt động cả trên **YouTube**, trong [`pageagent.js`](../../src/content/pageagent.js#L216-L222) (`op === 'seek'`):
   - Nếu là YouTube host có `seekTo`: gọi `call(state.host, 'seekTo', seconds, true)` (vì tốc độ gọi preview nay đã được `seekbar.js` **pause + `seeked`-gate** điều tiết, không còn bắn mù mỗi 100ms lúc đang play nữa).
   - **Trade-off định lượng (chấp nhận):** Preview ngoài buffer sẽ kích hoạt fetch segment thật (tối đa ~2.5 seek/s nhờ stall-gate 400ms + coalesce-latest, chỉ 1 chuỗi seek in-flight tại một thời điểm); trong buffer đạt ~5–15 seek/s và không tốn network thêm. E2E Stage 3 phải assert không gây `session.js` exit.
   - **V-2 Verified (`grep`):** Toàn bộ các caller `seek(...)` khác trong `src/content/` (`introskip.js:34`, `ui.js:342`, `ui.js:374`) đều giữ mặc định `isFinal = true`; chỉ `seekbar.js` gọi `seek(..., false)`.

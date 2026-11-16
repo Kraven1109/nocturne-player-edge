@@ -8,7 +8,7 @@
 
 ## 1. Project Mission & Architecture Context
 
-The **Nocturne Player Edge Port** project ports the Firefox/Gecko MV2 Web Extension `kvachikk/nocturne-player` (v0.9.1, commit `0de5804`, license MPL-2.0) to **Microsoft Edge (Chromium MV3)** on Linux (CachyOS / Edge 156.0.4314.50+) and Windows.
+The **Nocturne Player Edge Port** project ports the Firefox/Gecko MV2 Web Extension `kvachikk/nocturne-player` (v0.9.1, commit `0de5804`, license MPL-2.0) to **Microsoft Edge (Chromium MV3)** on Linux (Edge 156+) and Windows.
 
 ### Canonical Architectural Decisions (SSoT: `PORT_PLAN.md`)
 

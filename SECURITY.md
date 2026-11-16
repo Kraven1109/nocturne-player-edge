@@ -2,12 +2,12 @@
 
 ## Supported versions
 
-The latest release on addons.mozilla.org.
+The latest release on Microsoft Edge Add-ons Store and GitHub Releases.
 
 ## Reporting a vulnerability
 
 Use [GitHub private vulnerability
-reporting](https://github.com/kvachikk/nocturne-player/security/advisories/new).
+reporting](https://github.com/Kraven1109/nocturne-player-edge/security/advisories/new).
 Please do not open a public issue for a security problem.
 
 Expect a first reply within a week.

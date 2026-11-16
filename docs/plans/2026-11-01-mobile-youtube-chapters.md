@@ -14,7 +14,7 @@ On mobile YouTube (`m.youtube.com`):
 
 1. `<ytd-watch-flexy>` does not exist in the DOM.
 2. Mobile YouTube renders `<ytm-watch>` instead.
-3. In [`chapters.main.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/page/chapters.main.js), `flexy` is selected via `document.querySelector('ytd-watch-flexy')`, returning `null` on `m.youtube.com`.
+3. In [`chapters.main.js`](../../src/content/page/chapters.main.js), `flexy` is selected via `document.querySelector('ytd-watch-flexy')`, returning `null` on `m.youtube.com`.
 4. While the initial video load can fall back to `ytInitialData`, any subsequent SPA navigation on mobile cannot read updated chapters because `ytInitialData` is frozen on the first video and `<ytd-watch-flexy>` is absent.
 
 ---
@@ -32,7 +32,7 @@ Running headless Microsoft Edge with mobile viewport and Android Pixel 7 User-Ag
 
 ## 3. Surgical Implementation Plan (Minimal Diff)
 
-### 3.1. Update Watch Element Selector in [`chapters.main.js`](file:///DATA1/quang_dev/nocturne-player-edge/src/content/page/chapters.main.js)
+### 3.1. Update Watch Element Selector in [`chapters.main.js`](../../src/content/page/chapters.main.js)
 
 Change:
 
@@ -64,7 +64,7 @@ const sources = [
 ];
 ```
 
-### 3.2. Unit Tests in [`chapters.test.js`](file:///DATA1/quang_dev/nocturne-player-edge/test/unit/chapters.test.js)
+### 3.2. Unit Tests in [`chapters.test.js`](../../test/unit/chapters.test.js)
 
 Add test case verifying `readChaptersSnapshot` extracts chapters from mock `ytm-watch.data` when `ytd-watch-flexy` is absent.
 

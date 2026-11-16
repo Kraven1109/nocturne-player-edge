@@ -27,26 +27,40 @@ out of the extension itself (build-time only).
 `eslint-config-metarhia` plus Prettier, 80 columns. Prefer code that reads
 without comments; comment only what the code cannot say.
 
-## Commits
+## Commits & Naming Convention
 
 [Conventional Commits](https://www.conventionalcommits.org), lower case, 72
 characters max:
 
 ```
-feat(gestures): add pinch to crop black bars
+feat(gestures): add vertical dim and volume swipe
 fix(detect): rank videos by visible area
 ```
 
-Allowed scopes are listed in `commitlint.config.js`.
+Allowed scopes are listed in `commitlint.config.js`. Code conventions:
+
+- DOM markers use `data-nocturne*`; Shadow DOM state classes use `is-*` (`is-open`,
+  `is-dragging`, `is-visible`).
+- Cross-world CustomEvent bridge uses `nocturne:req` / `nocturne:res`.
+- Boolean settings keys follow `is<Feature>On` / `are<Plural><Adj>`; numeric
+  settings must declare bounds in `RANGES` inside `src/lib/settings.js`.
+- If editing `src/icons/icon.svg`, regenerate PNG icons with `npm run icons`.
 
 ## Testing a change
 
-Pure helpers get a unit test in `test/unit/`. Anything touching gestures,
-fullscreen, or the DOM has to be checked on a real device — Android behaves
-differently from desktop Firefox in ways that matter here.
+Pure helpers and DOM/state units get a test in `test/unit/`. Browser and
+bridge behavior is verified against Microsoft Edge via Playwright:
+
+```bash
+npm run build
+npm run validate:mv3
+npm run lint && npm test
+npm run test:e2e
+```
+
+For manual testing in a clean Edge profile:
 
 ```bash
 npm run fixture && npm run serve &
-adb reverse tcp:8422 tcp:8422
-npm run start:android
+npm start
 ```

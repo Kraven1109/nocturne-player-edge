@@ -1,17 +1,17 @@
 {
   "name": "nocturne-player-edge",
-  "version": "0.9.1-edge",
+  "version": "0.10.0",
   "private": true,
-  "description": "A touch-first video player for Chromium browsers (Microsoft Edge port of Nocturne Player)",
+  "description": "A touch-first video player for Microsoft Edge and Chromium browsers (port of Nocturne Player)",
   "license": "MPL-2.0",
   "author": "Vlad Pohorilets",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kvachikk/nocturne-player.git"
+    "url": "git+https://github.com/Kraven1109/nocturne-player-edge.git"
   },
-  "homepage": "https://github.com/kvachikk/nocturne-player",
+  "homepage": "https://github.com/Kraven1109/nocturne-player-edge",
   "bugs": {
-    "url": "https://github.com/kvachikk/nocturne-player/issues"
+    "url": "https://github.com/Kraven1109/nocturne-player-edge/issues"
   },
   "type": "module",
   "engines": {
@@ -24,6 +24,8 @@
     "start": "npm run build && microsoft-edge-stable --user-data-dir=$(mktemp -d /tmp/edge-nocturne-XXXXXX) --load-extension=./dist",
     "lint": "eslint . && prettier --check \"**/*.{js,mjs,json,md,css,html}\" && npm run lint:privacy",
     "lint:privacy": "node tools/check-privacy.mjs",
+    "validate:mv3": "node tools/validate-mv3.mjs",
+    "icons": "node tools/render-icons.mjs",
     "fix": "eslint . --fix && prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
     "test": "node --test test/unit",
     "test:e2e": "node test/e2e/chapters-spa.mjs",

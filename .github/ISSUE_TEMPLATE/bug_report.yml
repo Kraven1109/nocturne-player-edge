@@ -11,10 +11,10 @@ body:
       required: false
 
   - type: input
-    id: firefox
+    id: browser
     attributes:
-      label: Firefox version
-      placeholder: '142.0 on Android 15'
+      label: Microsoft Edge & OS version
+      placeholder: 'Edge 156 on Linux / Windows 11'
     validations:
       required: true
 
@@ -31,5 +31,5 @@ body:
     attributes:
       label: Confirm
       options:
-        - label: This is not YouTube, Vimeo or TikTok (out of scope by design)
+        - label: Verified with extension built from the latest main branch or store zip
           required: true

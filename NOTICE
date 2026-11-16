@@ -1,0 +1,20 @@
+Nocturne Player for Edge
+Copyright (c) Nocturne Edge Contributors
+
+This project is an independent Microsoft Edge / Chromium Manifest V3 port and
+continuation of Nocturne Player:
+  Upstream: https://github.com/kvachikk/nocturne-player
+  Author:   Vlad Pohorilets
+  Baseline: v0.9.1 (commit 0de5804)
+  License:  Mozilla Public License Version 2.0 (MPL-2.0)
+
+Major Edge / Chromium MV3 port changes (covered under MPL-2.0):
+- Synchronous CustomEvent two-world bridge (`pageagent.js` in world: "MAIN" and
+  `content/page/bridge.js` in ISOLATED world), replacing Firefox Xray wrappers.
+- Manifest V3 packaging (`src/manifest.mv3.json`) and PNG icon suite.
+- SPA YouTube desktop and mobile (`ytm-watch`) chapter extraction.
+- Smart auto-hide launcher badge and direct seeked-gated main-video scrubbing.
+- Opt-in vertical edge gestures (`layers.dim` overlay dimming with two-way AUTO
+  hysteresis and `video.volume` / mute with YouTube host sync).
+
+See LICENSE for the full MPL-2.0 license text.
