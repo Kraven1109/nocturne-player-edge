@@ -1,11 +1,11 @@
 import {
+  PINCH_RESET_THRESHOLD,
   clampPan,
   clampScale,
   computeCoverScale,
   computeDrawSize,
   computeFocalPan,
   computeMaxScale,
-  snapPinchScale,
 } from './zoom.js';
 
 const TRANSFORM_TRANSITION = 'transform 260ms cubic-bezier(0.32, 0.72, 0, 1)';
@@ -39,6 +39,7 @@ export const createVisuals = (video, stage) => {
   let rotation = 0;
   let isPinching = false;
   let isDragging = false;
+  let pendingRelayout = false;
   let lastTransform = 'none';
   let lastFilter = 'none';
   let pinchOrigin = null;
@@ -80,19 +81,20 @@ export const createVisuals = (video, stage) => {
         ? FILTER_TRANSITION
         : `${FILTER_TRANSITION}, ${TRANSFORM_TRANSITION}`;
 
-    video.style.setProperty('filter', filter, 'important');
-    video.style.setProperty('transform', transform, 'important');
-    video.style.setProperty('transition', transition, 'important');
-    lastFilter = video.style.getPropertyValue?.('filter') || filter;
-    lastTransform = video.style.getPropertyValue?.('transform') || transform;
+    const targetStyle = stage.style ?? video.style;
+    targetStyle.setProperty('--nocturne-filter', filter);
+    targetStyle.setProperty('--nocturne-transform', transform);
+    targetStyle.setProperty('--nocturne-transition', transition);
+    lastFilter = targetStyle.getPropertyValue?.('--nocturne-filter') || filter;
+    lastTransform =
+      targetStyle.getPropertyValue?.('--nocturne-transform') || transform;
   };
 
-  const place = (scale, { snap = false } = {}) => {
+  const place = (scale) => {
     const size = stageSize();
     const cover = coverScale(size);
     const maxScale = computeMaxScale(cover);
-    const clamped = clampScale(scale, maxScale);
-    view.scale = snap ? snapPinchScale(clamped, cover, maxScale) : clamped;
+    view.scale = clampScale(scale, maxScale);
     if (view.scale === 1) {
       view.x = 0;
       view.y = 0;
@@ -124,8 +126,8 @@ export const createVisuals = (video, stage) => {
     }
   };
 
-  const setScale = (scale, options) => {
-    const applied = place(scale, options);
+  const setScale = (scale) => {
+    const applied = place(scale);
     remember(applied);
     return applied;
   };
@@ -134,11 +136,17 @@ export const createVisuals = (video, stage) => {
   // what stops the picture from being left at yesterday's crop — blown up and
   // stretched — after the window has changed shape underneath it.
   const relayout = () => {
-    if (video.videoWidth === 0) {
+    const size = stageSize();
+    if (video.videoWidth === 0 || size.width <= 0 || size.height <= 0) {
       apply();
       return false;
     }
-    const cover = coverScale();
+    if (isPinching || isDragging) {
+      pendingRelayout = true;
+      return false;
+    }
+    pendingRelayout = false;
+    const cover = coverScale(size);
     if (intent === FIT) {
       place(1);
     } else if (intent === FILL) {
@@ -148,6 +156,12 @@ export const createVisuals = (video, stage) => {
       remember(view.scale);
     }
     return true;
+  };
+
+  const flushPendingRelayout = () => {
+    if (!pendingRelayout || isPinching || isDragging) return false;
+    pendingRelayout = false;
+    return relayout();
   };
 
   const canPan = () => {
@@ -225,13 +239,19 @@ export const createVisuals = (video, stage) => {
         view.x = focal.x;
         view.y = focal.y;
       }
-      return setScale(nextScale, { snap: false });
+      return setScale(nextScale);
     },
     endPinch: () => {
+      if (!isPinching) {
+        flushPendingRelayout();
+        return view.scale;
+      }
       isPinching = false;
       pinchOrigin = null;
-      const target = view.scale <= 1.03 ? 1 : view.scale;
-      return setScale(target, { snap: false });
+      const target = view.scale <= PINCH_RESET_THRESHOLD ? 1 : view.scale;
+      setScale(target);
+      flushPendingRelayout();
+      return view.scale;
     },
     canPan,
     beginPan: () => {
@@ -241,12 +261,16 @@ export const createVisuals = (video, stage) => {
     panBy: (dx, dy) => {
       view.x += dx;
       view.y += dy;
-      place(view.scale, { snap: false });
+      place(view.scale);
     },
     endPan: () => {
-      if (!isDragging) return;
+      if (!isDragging) {
+        flushPendingRelayout();
+        return;
+      }
       isDragging = false;
       apply();
+      flushPendingRelayout();
     },
     rotateQuarter: () => {
       rotation = (rotation + 90) % 360;

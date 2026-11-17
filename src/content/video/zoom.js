@@ -1,9 +1,7 @@
 export const MIN_SCALE = 1;
 export const SNAP_TOLERANCE = 0.04;
 export const MAX_FREE_ZOOM = 4;
-
-const SNAP_MIN_THRESHOLD = 1.05;
-const SNAP_COVER_TOLERANCE = 0.1;
+export const PINCH_RESET_THRESHOLD = 1.03;
 
 // With object-fit: contain the picture is letterboxed; this is the factor that
 // makes it fill the stage instead, which is what crops the black bars away.
@@ -37,21 +35,6 @@ export const snapScale = (scale, targets) => {
     if (Math.abs(scale - target) <= SNAP_TOLERANCE * target) return target;
   }
   return scale;
-};
-
-// Free-zoom release policy: snap close to 1x (recenter) or cover (fill), but
-// keep any deliberate free zoom level between or above cover intact.
-export const snapPinchScale = (
-  scale,
-  coverScale,
-  maxScale = computeMaxScale(coverScale),
-) => {
-  const clamped = clampScale(scale, maxScale);
-  if (clamped <= SNAP_MIN_THRESHOLD) return MIN_SCALE;
-  if (Math.abs(clamped - coverScale) <= SNAP_COVER_TOLERANCE) {
-    return clampScale(coverScale, maxScale);
-  }
-  return clamped;
 };
 
 // Returns screen-space AABB dimensions (already swapped at 90/270deg) plus the

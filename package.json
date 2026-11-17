@@ -28,7 +28,7 @@
     "icons": "node tools/render-icons.mjs",
     "fix": "eslint . --fix && prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
     "test": "node --test test/unit/*.test.js",
-    "test:e2e": "node test/e2e/chapters-spa.mjs",
+    "test:e2e": "node test/e2e/chapters-spa.mjs && node test/e2e/pinch-rotate.mjs",
     "fixture": "node tools/make-fixture.mjs",
     "serve": "node tools/serve.mjs",
     "prepare": "husky"

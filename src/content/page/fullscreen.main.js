@@ -15,7 +15,28 @@ const LOCKED = [
 
 let isLocked = false;
 
-const wrapFullscreenMethod = (original) =>
+// TEMPORARY diagnostic: tell the isolated world about every call, with the
+// caller's stack. Remove with src/content/debuglog.js.
+const reportCall = (name, thisArg, blocked) => {
+  if (!isLocked) return;
+  try {
+    const stack = String(new Error().stack || '')
+      .split('\n')
+      .slice(2, 5)
+      .map((line) => line.trim())
+      .join(' | ');
+    const who = thisArg && thisArg.tagName ? thisArg.tagName : 'document';
+    document.dispatchEvent(
+      new CustomEvent('nocturne:dbg', {
+        detail: `${blocked ? 'BLOCKED' : 'PASS'} ${name} on ${who} @ ${stack}`,
+      }),
+    );
+  } catch {
+    // Diagnostics must never break the page.
+  }
+};
+
+const wrapFullscreenMethod = (original, name) =>
   new Proxy(original, {
     apply(target, thisArg, args) {
       if (
@@ -25,8 +46,10 @@ const wrapFullscreenMethod = (original) =>
           thisArg.hasAttribute('data-nocturne-player')
         )
       ) {
+        reportCall(name, thisArg, true);
         return Promise.resolve();
       }
+      reportCall(name, thisArg, false);
       return Reflect.apply(target, thisArg, args);
     },
   });
@@ -46,7 +69,7 @@ export const installFullscreenLock = () => {
         Object.defineProperty(owner, name, {
           configurable: true,
           writable: true,
-          value: wrapFullscreenMethod(original),
+          value: wrapFullscreenMethod(original, name),
         });
       } catch {
         // Ignore if non-configurable in an unusual environment.

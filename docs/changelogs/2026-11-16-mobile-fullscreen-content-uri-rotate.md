@@ -9,11 +9,15 @@
 - **Web-layer fullscreen & sensor rotation (`src/content/session.js`, `src/local/local.html`):**
   - Switched `STAGE_STYLE` sizing from `100vw`/`100vh` to `100%` and mounted a
     scoped `<style data-nocturne-stage-style>` enforcing `:fullscreen` and
-    `::backdrop` black sizing alongside `html/body:has([data-nocturne-player])`
-    `background:#000` and `color-scheme:dark`.
-  - Added reversible `applyBlackThemeColor()` (`<meta name="theme-color" content="#000000">`) on `openStage()` with restore on `exit()`, plus black `theme-color` metadata in `local.html` (commit `07119be`).
+    `::backdrop` black sizing alongside `[data-nocturne-player] > video`
+    `!important` layout/cascade rules driven by CSS variables on `stage.style`.
+  - Added static black `<meta name="theme-color" content="#000000" />` on
+    extension-owned `local.html` (host `<meta>` / `:has()` overrides from
+    `07119be` were reverted per M9 after Android `T1`–`T4` proved the top strip
+    is an upstream Edge tab defect).
   - Gated `{ navigationUI: 'hide' }` to Chromium builds (`isChromium`) with a
-    `TypeError` fallback.
+    `TypeError` fallback, and exposed explicit `data-nocturne-pseudo-fullscreen`
+    status + one-shot click retry when `requestFullscreen()` rejects.
   - Added `isStageFullscreen()` (`stage` or `ui.host`), `readOrientationState`
     (`type:angle` for `180°` flip detection), pre-armed `lastTurnAt` before
     `screen.orientation.lock`, sensor-driven CSS rotation reset in `noteTurn`,
@@ -41,24 +45,21 @@
     `isVisualStyleIntact(video, overlay)` so pinch transforms never trigger
     self-repin flicker or exhaust `MAX_REPINS`.
 
-## Honest Verification Scope & Audit Findings (`7bbdf44`)
+## Honest Verification Scope & Audit Status (`P1`–`P6` Merged)
 
 ### Verified on Desktop Linux Microsoft Edge (`[EMPIRICAL]`)
 
-- `npm run lint` (ESLint, Prettier, `check-privacy.mjs` 50 files clean), `npm test` (`152/152` unit tests using fake/mocked DOM surfaces), `build:clean`, `validate:mv3`, `npm run package`, `npm run test:e2e` (`chapters-spa.mjs`), and GitHub Actions CI run `43919021114`.
-- Headless Pixel 7 CDP pinch probe on unobstructed `.surface` (`controls` hidden): pinch scaled `1x → 3.17x`, held `3.17391` after release, and emitted `0` bubble-phase leaks to `document`.
+- `npm run lint` (ESLint, Prettier, `check-privacy.mjs` 51 files clean), `npm test` (`154/154` unit tests), `build:clean`, `validate:mv3`, `npm run package`, and full `npm run test:e2e`:
+  - `test/e2e/chapters-spa.mjs`: `ALL OK`
+  - `test/e2e/pinch-rotate.mjs` (Pixel 7 `412×915` CDP touch): all 7 assertions passed (`R1` light-DOM cascade, `P1+R2` pinch over `.play-button`, `P2` re-pinch after 1-finger lift, `P3` deferred `relayout`, `R4` Play tap after pinch, `P4` >650-write CSS/guard burst survival, `R5` `blur` reset + resize flush).
 
-### Confirmed Open Defects & Code Gaps
+### Reclassified Platform Limitations
 
-1. **Pinch fails over visible `.chrome` sibling controls:** `chrome` (`pointer-events: auto` on `.topbar`, `.centre-row > *`, `.seek-area`) sits above `.surface` in `ui.shadow`. Starting a 2-finger pinch over `.centre-row` while paused/controls open is ignored (`p2Move` remained stuck at prior `scale(2)` in CDP probe).
-2. **Capture-phase host listeners still see touch/pointer events:** `openStage()` stops propagation only in `stage` bubble phase (`bubbleLeaksCount: 0`, **`captureLeaksCount: 22`** on host `document` capture listeners in CDP probe).
-3. **`styleGuard` permanent disconnect at `MAX_REPINS = 240`:** Sites rewriting inline styles on `requestAnimationFrame` exhaust 240 repins in ~2–4s and permanently disconnect `styleGuard`.
-4. **Secondary pinch/fullscreen gaps:** `visuals.relayout()` can run even while `isPinching === true`; `MODE.ABANDONED` blocks lifting one finger then placing it back down to continue pinching without lifting both fingers; `requestFullscreen(stage)` boolean rejection is ignored without fallback warning/telemetry; `touch-action: none` on `:host` is not CSS-inherited by arbitrary shadow descendants.
+- **Edge Canary Android 160 top bar / half-left landscape bar (`C1`–`C3` / `T1`–`T4`):** Confirmed on-device via `T1` (`video.requestFullscreen()`), `T2`, `T3` (`viewport-fit=cover`), `T4`, and extension-disabled runs: none remove the bar until the tab is refreshed. Documented as an upstream Edge Android bug, no longer blocking release.
+- **Host capture-phase touch/pointer listeners (`C1`):** DOM capture order (`window → document → stage`) is a browser platform constraint; measured on live mobile sites rather than intercepted.
 
-### Never Verified on Physical Microsoft Edge for Android (`[UNVERIFIED]`)
+### Pending Physical Edge Android Verification (Pre-Publish Gate)
 
-- None of commits `7d5a248`, `07119be`, or `7bbdf44` have been run on real Edge Android hardware:
-  - Native top grey strip (`rgb(41,41,41)`, `ToolbarControlContainer` in device screenshot): `<meta name="theme-color" content="#000000">` (`07119be`) is an unverified browser hint and cannot hide native Android UI views.
-  - `screen.orientation.lock()` primary rotate path (always rejects on desktop Edge) and Android compositor half-black behavior.
-  - Real `local.html` `<input type="file">` with Android `content://` blobs (direct `content://` pages remain blocked from MV3 `<all_urls>` content-script injection).
-  - Real Android Edge compositor pinch-zoom feel on live sites (`m.youtube.com`, embedded iframes).
+1. Verify pinch-to-zoom survives `> 5` minutes on `m.youtube.com` (including over `.chrome`), then remove temporary `debuglog.js` / `reportCall` hooks.
+2. Verify `screen.orientation.lock()` on real device and A/B bisect `fsEl=null` in embedded `384×216` iframes if reproducible without `07119be`.
+3. Verify `local.html` `<input type="file">` with Android `content://` media blobs (direct `content://` tabs remain blocked under MV3 `<all_urls>`).

@@ -18,11 +18,12 @@ const createSurface = () => {
       width: WIDTH,
       height: HEIGHT,
     }),
-    fire: (type, xRatio, yRatio, pointerId = 1) =>
+    fire: (type, xRatio, yRatio, pointerId = 1, extra = {}) =>
       listeners.get(type)?.({
         pointerId,
         clientX: xRatio * WIDTH,
         clientY: yRatio * HEIGHT,
+        ...extra,
       }),
   };
 };
@@ -31,7 +32,7 @@ const setUp = (options = {}) => {
   const surface = createSurface();
   const events = [];
   const record = (name) => (detail) => events.push({ name, ...detail });
-  createRecognizer(
+  const recognizer = createRecognizer(
     surface,
     {
       tap: record('tap'),
@@ -44,6 +45,7 @@ const setUp = (options = {}) => {
       pinchStart: record('pinchStart'),
       pinchMove: record('pinchMove'),
       pinchEnd: record('pinchEnd'),
+      gestureReset: record('gestureReset'),
       swipe: record('swipe'),
     },
     options,
@@ -52,7 +54,7 @@ const setUp = (options = {}) => {
     surface.fire('pointerdown', xRatio, yRatio);
     surface.fire('pointerup', xRatio, yRatio);
   };
-  return { surface, events, tapAt };
+  return { surface, events, tapAt, recognizer };
 };
 
 beforeEach(() => {
@@ -278,35 +280,57 @@ test('pan preserves H1 idempotency and H2 lock + pinch emits midpoint', () => {
   mock.timers.reset();
 });
 
-test('pinch bounce and pointercancel stay abandoned until reset', () => {
+test('pinch cancel abandons lone finger and allows P2 re-pinch', () => {
   const { events, surface } = setUp({ canPan: () => true });
   surface.fire('pointerdown', 0.4, 0.5, 1);
   surface.fire('pointerdown', 0.6, 0.5, 2);
   surface.fire('pointerup', 0.6, 0.5, 2);
-  // Stray finger bounce while the first finger is still held must not
-  // restart a new pinch mid-release.
-  surface.fire('pointerdown', 0.62, 0.5, 3);
-  surface.fire('pointermove', 0.75, 0.5, 3);
-  surface.fire('pointerup', 0.62, 0.5, 3);
-  surface.fire('pointerup', 0.4, 0.5, 1);
-  mock.timers.runAll();
-
+  // Finger move stays ignored in ABANDONED, and <12px bounce stays ignored.
+  surface.fire('pointermove', 0.45, 0.5, 1);
+  surface.fire('pointerdown', 0.455, 0.5, 3);
+  surface.fire('pointerup', 0.455, 0.5, 3);
   assert.equal(events.filter((e) => e.name === 'pinchStart').length, 1);
-  assert.equal(events.filter((e) => e.name === 'pinchMove').length, 0);
-  assert.equal(events.filter((e) => e.name === 'pinchEnd').length, 1);
-  assert.equal(events.filter((e) => e.name === 'tap').length, 0);
 
-  // Cancel path clears PINCH into ABANDONED cleanly with a single pinchEnd.
-  surface.fire('pointerdown', 0.4, 0.5, 4);
-  surface.fire('pointerdown', 0.6, 0.5, 5);
-  surface.fire('pointercancel', 0.6, 0.5, 5);
-  surface.fire('pointermove', 0.5, 0.5, 4);
-  surface.fire('pointerup', 0.5, 0.5, 4);
+  // Putting a 2nd finger >= 12px away re-enters PINCH cleanly without reset.
+  surface.fire('pointerdown', 0.7, 0.5, 4);
+  surface.fire('pointermove', 0.8, 0.5, 4);
+  surface.fire('pointercancel', 0.8, 0.5, 4);
+  surface.fire('pointermove', 0.5, 0.5, 1);
+  surface.fire('pointerup', 0.5, 0.5, 1);
   mock.timers.runAll();
 
   assert.equal(events.filter((e) => e.name === 'pinchStart').length, 2);
+  assert.equal(events.filter((e) => e.name === 'pinchMove').length, 1);
   assert.equal(events.filter((e) => e.name === 'pinchEnd').length, 2);
+  assert.equal(events.filter((e) => e.name === 'dragStart').length, 0);
   assert.equal(events.filter((e) => e.name === 'tap').length, 0);
+  mock.timers.reset();
+});
+
+test('adoptPointers dedupes pair IDs and primary touch clears orphans', () => {
+  const { events, surface, recognizer } = setUp({ canPan: () => true });
+  surface.fire('pointerdown', 0.5, 0.5, 1);
+  surface.fire('pointermove', 0.55, 0.5, 1);
+  // Finger 1 was already tracked on surface; Finger 2 comes via chrome adopt.
+  recognizer.adoptPointers(
+    new Map([
+      [1, { clientX: 440, clientY: 180 }],
+      [2, { clientX: 600, clientY: 180 }],
+    ]),
+  );
+  assert.equal(recognizer.getPointerCount(), 2);
+  assert.equal(events.filter((e) => e.name === 'dragEnd').length, 1);
+  assert.equal(events.filter((e) => e.name === 'pinchStart').length, 1);
+
+  // Simulate orphaned pointer 2 without pointerup, then fresh primary touch.
+  surface.fire('pointerup', 0.55, 0.5, 1);
+  assert.equal(recognizer.getPointerCount(), 1);
+  surface.fire('pointerdown', 0.2, 0.5, 9, {
+    pointerType: 'touch',
+    isPrimary: true,
+  });
+  assert.equal(recognizer.getPointerCount(), 1);
+  assert.equal(events.filter((e) => e.name === 'gestureReset').length, 1);
   mock.timers.reset();
 });
 

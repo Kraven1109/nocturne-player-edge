@@ -3,13 +3,13 @@ import { test } from 'node:test';
 
 import { createVisuals } from '../../src/content/video/visuals.js';
 import {
+  PINCH_RESET_THRESHOLD,
   clampPan,
   clampScale,
   computeCoverScale,
   computeDrawSize,
   computeFocalPan,
   computeMaxScale,
-  snapPinchScale,
   snapScale,
 } from '../../src/content/video/zoom.js';
 
@@ -61,13 +61,11 @@ test('pan cannot expose an edge', () => {
 });
 
 test('free-zoom policy preserves arbitrary scales past 1x [M2]', () => {
+  assert.equal(PINCH_RESET_THRESHOLD, 1.03);
   assert.equal(computeMaxScale(1), 4);
   assert.equal(computeMaxScale(5.5), 5.5);
-  assert.equal(snapPinchScale(2.5, 1), 2.5);
-  assert.equal(snapPinchScale(3.5, 2.844), 3.5);
-  assert.equal(snapPinchScale(1.02, 1), 1);
-  assert.equal(snapPinchScale(2.8, 2.844), 2.844);
-  assert.equal(snapPinchScale(6, 1), 4);
+  assert.equal(clampScale(3.5, computeMaxScale(2.844)), 3.5);
+  assert.equal(clampScale(6, computeMaxScale(1)), 4);
 });
 
 test('computeDrawSize computes rotated screen-space AABB bounds [M4]', () => {
@@ -113,7 +111,6 @@ test('portrait letterbox locks Y and rotation reclamps zoom [N2, N4]', () => {
     clampPan(100, 100, 2, 412, 915, draw.drawWidth, draw.drawHeight),
     { x: 100, y: 0 },
   );
-  assert.equal(snapPinchScale(4.5, 5.226), 4.5);
   assert.equal(clampScale(5.2, computeMaxScale(1.059)), 4);
 
   const stage = { getBoundingClientRect: () => ({ width: 412, height: 915 }) };
@@ -131,33 +128,46 @@ test('portrait letterbox locks Y and rotation reclamps zoom [N2, N4]', () => {
   assert.equal(visuals.getScale(), 4);
 });
 
-test('visuals keeps free pinch scale and anchors from origin', () => {
-  const props = new Map();
-  const stage = { getBoundingClientRect: () => ({ width: 800, height: 450 }) };
+test('visuals keeps free pinch scale and defers relayout cleanly', () => {
+  const stageProps = new Map();
+  let width = 800;
+  let height = 450;
+  const stage = {
+    getBoundingClientRect: () => ({ width, height }),
+    style: {
+      setProperty: (k, v) => stageProps.set(k, v),
+      getPropertyValue: (k) => stageProps.get(k) ?? '',
+    },
+  };
   const video = {
     videoWidth: 1920,
     videoHeight: 1080,
-    style: {
-      setProperty: (k, v) => props.set(k, v),
-      getPropertyValue: (k) => props.get(k) ?? '',
-    },
+    style: { setProperty: () => {}, getPropertyValue: () => '' },
   };
   const visuals = createVisuals(video, stage);
 
-  // Near 1.12x where snapPinchScale would snap to cover=1, free zoom holds.
   visuals.beginPinch({ focalX: 100, focalY: 50 });
   visuals.pinchTo(1.5, { focalX: 100, focalY: 50 });
   const at15 = visuals.getExpectedStyle().transform;
   assert.equal(at15, 'translate(-50px, -25px) scale(1.5)');
-  visuals.pinchTo(2, { focalX: 120, focalY: 60 });
-  visuals.pinchTo(1.5, { focalX: 100, focalY: 50 });
-  assert.equal(visuals.getExpectedStyle().transform, at15);
-  close(visuals.endPinch(), 1.5);
+  assert.equal(stageProps.get('--nocturne-transform'), at15);
 
-  // Just above MIN_SCALE (1.12) must remain 1.12 on release; <= 1.03 resets.
-  visuals.beginPinch({ focalX: 0, focalY: 0 });
-  visuals.pinchTo(1.12, { focalX: 0, focalY: 0 });
-  close(visuals.endPinch(), 1.12);
+  // Relayout mid-pinch or on zero dims must defer without mutating view.
+  assert.equal(visuals.relayout(), false);
+  width = 0;
+  assert.equal(visuals.relayout(), false);
+  width = 400;
+  height = 800;
+  assert.equal(visuals.relayout(), false);
+  close(visuals.getScale(), 1.5);
+  assert.equal(visuals.getExpectedStyle().transform, at15);
+
+  // Releasing pinch above PINCH_RESET_THRESHOLD holds 1.5 and flushes relayout.
+  close(visuals.endPinch(), 1.5);
+  assert.equal(
+    visuals.getExpectedStyle().transform,
+    'translate(-50px, 0px) scale(1.5)',
+  );
 
   visuals.beginPinch({ focalX: 0, focalY: 0 });
   visuals.pinchTo(1.02, { focalX: 0, focalY: 0 });

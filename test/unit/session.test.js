@@ -16,9 +16,10 @@ registerHooks({
 });
 
 const {
-  applyBlackThemeColor,
   captureVideoState,
   commitCapturedVolume,
+  createBurstGuard,
+  isVisualStyleIntact,
   readOrientationAxis,
   readOrientationState,
   requestFullscreen,
@@ -165,49 +166,59 @@ test('readOrientationState distinguishes 180deg landscape flip', () => {
   assert.equal(readOrientationState(legacy), 'portrait:0');
 });
 
-const createMockMeta = (initialContent = null) => {
-  const attrs = new Map();
-  if (initialContent !== null) attrs.set('content', initialContent);
-  return {
-    isConnected: true,
-    hasAttribute: (k) => attrs.has(k),
-    getAttribute: (k) => attrs.get(k) ?? null,
-    setAttribute: (k, v) => attrs.set(k, String(v)),
-    removeAttribute: (k) => attrs.delete(k),
-    remove() {
-      this.isConnected = false;
+test('isVisualStyleIntact allows normal inline and flags !important', () => {
+  const stageProps = new Map([
+    ['--nocturne-transform', 'scale(2)'],
+    ['--nocturne-filter', 'none'],
+  ]);
+  const priorities = new Map();
+  const video = {
+    style: {
+      getPropertyPriority: (k) => priorities.get(k) ?? '',
     },
   };
-};
-
-test('applyBlackThemeColor sets/restores meta cleanly without clobber', () => {
-  const existing = createMockMeta('#ffffff');
-  const spaMeta = createMockMeta('#112233');
-  const docWithMeta = {
-    querySelectorAll: () => [existing, spaMeta],
-    head: null,
+  const stage = {
+    style: {
+      getPropertyValue: (k) => stageProps.get(k) ?? '',
+    },
   };
-  const restore = applyBlackThemeColor(docWithMeta);
-  assert.equal(existing.getAttribute('content'), '#000000');
-  assert.equal(spaMeta.getAttribute('content'), '#000000');
-
-  // Simulate SPA overwriting its meta mid-session; restore must not clobber it.
-  spaMeta.setAttribute('content', '#445566');
-  restore();
-  assert.equal(existing.getAttribute('content'), '#ffffff');
-  assert.equal(spaMeta.getAttribute('content'), '#445566');
-
-  const inserted = [];
-  const docWithoutMeta = {
-    querySelectorAll: () => [],
-    head: { prepend: (node) => inserted.push(node) },
-    createElement: () => createMockMeta(),
+  const overlay = {
+    getExpectedStyle: () => ({ transform: 'scale(2)', filter: 'none' }),
   };
-  const restoreCreated = applyBlackThemeColor(docWithoutMeta);
-  assert.equal(inserted.length, 1);
-  assert.equal(inserted[0].getAttribute('name'), 'theme-color');
-  assert.equal(inserted[0].getAttribute('content'), '#000000');
-  assert.equal(inserted[0].isConnected, true);
-  restoreCreated();
-  assert.equal(inserted[0].isConnected, false);
+
+  // Empty or normal-priority inline video styles do not trigger repins (R3).
+  assert.equal(isVisualStyleIntact(video, overlay, stage), true);
+
+  priorities.set('transform', 'important');
+  assert.equal(isVisualStyleIntact(video, overlay, stage), false);
+
+  priorities.delete('transform');
+  stageProps.set('--nocturne-transform', 'scale(1)');
+  assert.equal(isVisualStyleIntact(video, overlay, stage), false);
+});
+
+test('createBurstGuard pauses bursts and recovers with capped backoff', () => {
+  const guard = createBurstGuard({
+    windowMs: 2000,
+    limit: 3,
+    baseCooldownMs: 5000,
+    maxCooldownMs: 60000,
+  });
+  assert.equal(guard.record(100).triggered, false);
+  assert.equal(guard.record(200).triggered, false);
+  assert.equal(guard.record(300).triggered, false);
+  const firstPause = guard.record(400);
+  assert.deepEqual(firstPause, { triggered: true, cooldownMs: 5000 });
+  assert.equal(guard.isPaused(), true);
+
+  guard.resume({ resetBackoff: false });
+  assert.equal(guard.isPaused(), false);
+  for (let i = 0; i < 3; i++) guard.record(6000 + i);
+  const secondPause = guard.record(6010);
+  assert.deepEqual(secondPause, { triggered: true, cooldownMs: 15000 });
+
+  // Gesture reset restores base cooldown.
+  guard.resume({ resetBackoff: true });
+  for (let i = 0; i < 3; i++) guard.record(22000 + i);
+  assert.equal(guard.record(22010).cooldownMs, 5000);
 });

@@ -158,12 +158,53 @@ export const createRecognizer = (
     });
   };
 
+  const shouldReenterPinch = () => {
+    if (pointers.size < 2) return false;
+    const points = Array.from(pointers.values());
+    return distanceBetween(points[0], points[1]) >= MOVE_TOLERANCE_PX;
+  };
+
+  const finishActiveGesture = () => {
+    clearHoldTimer();
+    const prevMode = mode;
+    const prevAxis = dragAxis;
+    pinchIds = null;
+    mode = MODE.IDLE;
+    dragAxis = 'horizontal';
+    if (prevMode === MODE.DRAG) {
+      emit('dragEnd', { zone: anchor.zone, axis: prevAxis });
+    } else if (prevMode === MODE.HOLD) {
+      emit('holdEnd', { zone: anchor.zone });
+    } else if (prevMode === MODE.PINCH) {
+      emit('pinchEnd', {});
+    }
+  };
+
+  const resetPointers = () => {
+    if (pointers.size === 0 && mode === MODE.IDLE) return;
+    pointers.clear();
+    finishActiveGesture();
+    emit('gestureReset', {});
+  };
+
   const handleDown = (event) => {
     if (!isEnabled) return;
+    if (
+      event.pointerType === 'touch' &&
+      event.isPrimary === true &&
+      pointers.size > 0 &&
+      !pointers.has(event.pointerId)
+    ) {
+      resetPointers();
+    }
     capturePointer(event.pointerId);
     const point = localPoint(event);
     pointers.set(event.pointerId, point);
-    if (mode === MODE.ABANDONED) return;
+    if (mode === MODE.PINCH) return;
+    if (mode === MODE.ABANDONED) {
+      if (shouldReenterPinch()) startPinch();
+      return;
+    }
 
     if (pointers.size === 2) {
       startPinch();
@@ -226,8 +267,11 @@ export const createRecognizer = (
       handlePinchMove();
       return;
     }
-    const isSettled =
-      mode === MODE.ABANDONED || mode === MODE.HOLD || mode === MODE.SWIPE;
+    if (mode === MODE.ABANDONED) {
+      if (shouldReenterPinch()) startPinch();
+      return;
+    }
+    const isSettled = mode === MODE.HOLD || mode === MODE.SWIPE;
     if (isSettled) return;
 
     if (mode === MODE.PENDING) {
@@ -347,10 +391,32 @@ export const createRecognizer = (
   surface.addEventListener('pointercancel', handleCancel);
   surface.addEventListener('lostpointercapture', handleCancel);
 
+  const adoptPointers = (entries) => {
+    if (!isEnabled) return;
+    for (const [id, raw] of entries) {
+      pointers.set(id, localPoint(raw));
+    }
+    if (mode !== MODE.PINCH && pointers.size >= 2) {
+      startPinch();
+    }
+  };
+
+  const eventHandlers = {
+    pointerdown: handleDown,
+    pointermove: handleMove,
+    pointerup: handleUp,
+    pointercancel: handleCancel,
+    lostpointercapture: handleCancel,
+  };
+
   return {
     setEnabled: (value) => {
       isEnabled = value;
     },
+    adoptPointers,
+    resetPointers,
+    getPointerCount: () => pointers.size,
+    handlePointerEvent: (type, event) => eventHandlers[type]?.(event),
     destroy: () => {
       clearHoldTimer();
       if (tapTimer !== null) clearTimeout(tapTimer);

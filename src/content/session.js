@@ -3,6 +3,7 @@ import { createShadowHost, el, pinStyle } from './shell.js';
 import { cacheHost, setSiteLoop } from './page/bridge.js';
 import { findFeedScroller, stepFeed, waitForNextVideo } from './video/feed.js';
 import { lockPageFullscreen } from './fullscreenlock.js';
+import { dbg, mountDebugLog } from './debuglog.js';
 import playerCss from './player.css';
 
 const STALL_GRACE_MS = 400;
@@ -14,7 +15,10 @@ const STALL_GRACE_MS = 400;
 const EMPTIED_GRACE_MS = 6000;
 const NETWORK_EMPTY = 0;
 const RECOVER_DELAY_MS = 250;
-const MAX_REPINS = 240;
+const GUARD_WINDOW_MS = 2000;
+const GUARD_BURST_LIMIT = 30;
+const GUARD_BASE_COOLDOWN_MS = 5000;
+const GUARD_MAX_COOLDOWN_MS = 60000;
 // Below this share of the screen, a player that has lost fullscreen is playing
 // in the box the site gave it — an embedded player's frame — rather than over
 // the whole page, where it would still want its full set of controls.
@@ -41,60 +45,6 @@ const STAGE_STYLE = {
   'z-index': '2147483646',
 };
 
-const STAGE_CSS =
-  '[data-nocturne-player]:fullscreen,' +
-  '[data-nocturne-player]:-webkit-full-screen{' +
-  'position:fixed!important;inset:0!important;' +
-  'width:100%!important;height:100%!important;' +
-  'max-width:none!important;max-height:none!important;' +
-  'margin:0!important;padding:0!important;background:#000!important;}' +
-  '[data-nocturne-player]::backdrop{background:#000!important;}' +
-  'html:has([data-nocturne-player]),' +
-  'body:has([data-nocturne-player]){' +
-  'background:#000!important;color-scheme:dark!important;}';
-
-// Hints Chromium/Edge Android's TopUiThemeColorProvider to tint any top bar
-// strip pure #000000 while open, without mutating layout viewport metadata
-// or overwriting an SPA update made during the session.
-export const applyBlackThemeColor = (doc = document) => {
-  const nodes = Array.from(
-    doc.querySelectorAll?.('meta[name="theme-color" i]') ?? [],
-  );
-  const snapshots = nodes.map((node) => ({
-    node,
-    hadContent: node.hasAttribute('content'),
-    content: node.getAttribute('content'),
-  }));
-  for (const { node } of snapshots) {
-    node.setAttribute('content', '#000000');
-  }
-
-  let created = null;
-  if (snapshots.length === 0 && doc.head) {
-    created = doc.createElement('meta');
-    created.setAttribute('name', 'theme-color');
-    created.setAttribute('content', '#000000');
-    created.setAttribute('data-nocturne-theme', '');
-    doc.head.prepend(created);
-  }
-
-  return () => {
-    if (created?.isConnected) created.remove();
-    created = null;
-    for (const snap of snapshots) {
-      if (!snap.node.isConnected) continue;
-      if (snap.node.getAttribute('content') !== '#000000') continue;
-      if (snap.hadContent) snap.node.setAttribute('content', snap.content);
-      else snap.node.removeAttribute('content');
-    }
-  };
-};
-
-// A site's own player keeps rewriting the video's inline style — YouTube sets
-// a pixel width, height and offset on every layout pass — which is what used to
-// leave the picture stuck against the left edge or stretched across the screen
-// after coming back from another app. Position and offsets are pinned here too,
-// not only the size, and re-pinned whenever the site writes over them.
 const VIDEO_STYLE = {
   position: 'relative',
   left: '0',
@@ -118,10 +68,30 @@ const VIDEO_STYLE = {
   'transform-origin': 'center center',
 };
 
-// Layout keys are pinned from VIDEO_STYLE; transform and filter are written by
-// visuals and checked against visuals.getExpectedStyle() in pin() so pinching
-// never triggers a self-repin loop.
 const VIDEO_STYLE_KEYS = Object.keys(VIDEO_STYLE);
+const VIDEO_GUARDED_KEYS = VIDEO_STYLE_KEYS.concat([
+  'transform',
+  'filter',
+  'transition',
+]);
+
+const VIDEO_CASCADE_CSS = [
+  ...VIDEO_STYLE_KEYS.map((key) => `${key}:${VIDEO_STYLE[key]}!important;`),
+  'transform:var(--nocturne-transform,none)!important;',
+  'filter:var(--nocturne-filter,none)!important;',
+  'transition:var(--nocturne-transition,none)!important;',
+].join('');
+
+const STAGE_CSS = [
+  '[data-nocturne-player]:fullscreen,',
+  '[data-nocturne-player]:-webkit-full-screen{',
+  'position:fixed!important;inset:0!important;',
+  'width:100%!important;height:100%!important;',
+  'max-width:none!important;max-height:none!important;',
+  'margin:0!important;padding:0!important;background:#000!important;}',
+  '[data-nocturne-player]::backdrop{background:#000!important;}',
+  `[data-nocturne-player] > video{${VIDEO_CASCADE_CSS}}`,
+].join('');
 
 const STAGE_BUBBLE_EVENTS = [
   'touchstart',
@@ -175,31 +145,65 @@ const auditRestore = (video, state) => {
   return false;
 };
 
-// The style is compared against what the browser serialised, never against
-// what we asked for: setting `left: 0` reads back as `0px`, so comparing with
-// the input would find a difference every time and re-pin on the strength of
-// its own mutation record — a loop that recalculates style until the phone
-// crawls.
-const readStyle = (video) => {
-  const seen = {};
-  for (const name of VIDEO_STYLE_KEYS) {
-    seen[name] = video.style.getPropertyValue(name);
+const hasImportantInlineOverride = (video) =>
+  VIDEO_GUARDED_KEYS.some(
+    (name) => video.style.getPropertyPriority?.(name) === 'important',
+  );
+
+const stripImportantInlineOverrides = (video) => {
+  for (const name of VIDEO_GUARDED_KEYS) {
+    if (video.style.getPropertyPriority?.(name) === 'important') {
+      video.style.removeProperty(name);
+    }
   }
-  return seen;
 };
 
-const isSameStyle = (first, second) => {
-  if (first === null) return false;
-  return VIDEO_STYLE_KEYS.every((name) => first[name] === second[name]);
-};
-
-const isVisualStyleIntact = (video, overlay) => {
+export const isVisualStyleIntact = (video, overlay, stage = null) => {
+  if (hasImportantInlineOverride(video)) return false;
   if (!overlay) return true;
+  const propSource = stage?.style ?? video.style;
+  const readVar = (name, fallback) =>
+    propSource.getPropertyValue?.(name) || fallback;
   const { transform, filter } = overlay.getExpectedStyle();
   return (
-    video.style.getPropertyValue('transform') === transform &&
-    video.style.getPropertyValue('filter') === filter
+    readVar('--nocturne-transform', transform) === transform &&
+    readVar('--nocturne-filter', filter) === filter
   );
+};
+
+// Sliding-window burst guard: pauses style observation briefly when a page
+// aggressively rewrites inline !important every animation frame, then recovers
+// with exponential backoff instead of disconnecting permanently.
+export const createBurstGuard = ({
+  windowMs = GUARD_WINDOW_MS,
+  limit = GUARD_BURST_LIMIT,
+  baseCooldownMs = GUARD_BASE_COOLDOWN_MS,
+  maxCooldownMs = GUARD_MAX_COOLDOWN_MS,
+} = {}) => {
+  let stamps = [];
+  let cooldownMs = baseCooldownMs;
+  let paused = false;
+
+  return {
+    record: (now) => {
+      if (paused) return { triggered: false, cooldownMs };
+      const cutoff = now - windowMs;
+      stamps = stamps.filter((ts) => ts >= cutoff);
+      stamps.push(now);
+      if (stamps.length <= limit) return { triggered: false, cooldownMs };
+      paused = true;
+      stamps = [];
+      const waitMs = cooldownMs;
+      cooldownMs = Math.min(maxCooldownMs, cooldownMs * 3);
+      return { triggered: true, cooldownMs: waitMs };
+    },
+    resume: ({ resetBackoff = false } = {}) => {
+      paused = false;
+      stamps = [];
+      if (resetBackoff) cooldownMs = baseCooldownMs;
+    },
+    isPaused: () => paused,
+  };
 };
 
 // Request immersive fullscreen on Chromium/Edge Android while keeping default
@@ -367,7 +371,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   let stabilizeLastSize = null;
   let stabilizeMatches = 0;
   let unlockPageFullscreen = () => {};
-  let restoreThemeColor = () => {};
+  let unmountDebug = () => {};
+  let pendingFullscreenRetry = false;
   let lastTurnAt = -Infinity;
   let heldOrientation = readOrientationState();
 
@@ -462,35 +467,51 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     const own = createScope();
 
     let styleGuard = null;
-    let pinnedStyle = null;
-    let repinCount = 0;
+    let rearmTimer = null;
     let overlay = null;
+    const burstGuard = createBurstGuard();
 
-    // Re-pinning is bounded: a site that fights back with !important of its
-    // own would otherwise trade writes with us for as long as the film lasts.
-    // After the budget runs out the guard steps aside and the picture is
-    // re-fitted on the ordinary relayout events instead.
+    const observeVideo = () => {
+      if (!styleGuard) return;
+      styleGuard.observe(video, {
+        attributes: true,
+        attributeFilter: ['style', 'width', 'height'],
+      });
+    };
+
+    let rearmGuard = () => {};
+
+    // Inline non-!important styles already lose to STAGE_CSS !important rules.
+    // The observer only needs to clear inline !important overrides or re-sync
+    // stage custom props, cooling down cleanly under aggressive rAF bursts.
     const pin = () => {
-      if (
-        isSameStyle(pinnedStyle, readStyle(video)) &&
-        isVisualStyleIntact(video, overlay)
-      ) {
-        return;
-      }
+      if (isVisualStyleIntact(video, overlay, stage)) return;
 
-      repinCount += 1;
-      if (repinCount > MAX_REPINS) {
+      const burst = burstGuard.record(performance.now());
+      if (burst.triggered) {
         if (styleGuard) styleGuard.disconnect();
-        styleGuard = null;
-        console.warn(
-          'Nocturne: the site keeps rewriting the video, leaving it',
-        );
+        dbg(`styleGuard cooldown ${burst.cooldownMs}ms`);
+        rearmTimer = own.later(() => {
+          rearmTimer = null;
+          rearmGuard(false);
+        }, burst.cooldownMs);
         return;
       }
 
-      pinStyle(video, VIDEO_STYLE);
+      stripImportantInlineOverrides(video);
       if (overlay) overlay.repin();
-      pinnedStyle = readStyle(video);
+    };
+
+    rearmGuard = (resetBackoff = false) => {
+      if (rearmTimer !== null) {
+        own.cancel(rearmTimer);
+        rearmTimer = null;
+      }
+      if (!burstGuard.isPaused()) return;
+      burstGuard.resume({ resetBackoff });
+      observeVideo();
+      pin();
+      dbg('styleGuard re-armed');
     };
 
     video.replaceWith(anchor);
@@ -500,10 +521,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     // The site is free to keep laying its player out; it just does not get to
     // move the picture we are showing.
     styleGuard = new MutationObserver(pin);
-    styleGuard.observe(video, {
-      attributes: true,
-      attributeFilter: ['style', 'width', 'height'],
-    });
+    observeVideo();
 
     stage.prepend(video);
     watchForTeardown(video, own, () => actions.exit());
@@ -548,10 +566,18 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       video,
       release,
       notify: (text) => overlay.notify(text),
-      rotateQuarter: () => overlay.rotateQuarter(),
+      rotateQuarter: () => {
+        rearmGuard(true);
+        return overlay.rotateQuarter();
+      },
       resetRotation: () => overlay.resetRotation(),
+      resetGestures: () => {
+        rearmGuard(true);
+        overlay.resetGestures();
+      },
       showControls: () => overlay.showControls(),
       relayout: () => {
+        rearmGuard(false);
         pin();
         overlay.setScreen(readScreen());
         overlay.relayout();
@@ -562,14 +588,17 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   const exit = () => {
     if (!isActive) return;
     isActive = false;
+    dbg('exit() called', true);
+    unmountDebug();
+    unmountDebug = () => {};
 
     if (relayoutFrame !== 0) cancelAnimationFrame(relayoutFrame);
     relayoutFrame = 0;
     stopStabilize();
     scope.dispose();
     unlockPageFullscreen();
-    restoreThemeColor();
-    restoreThemeColor = () => {};
+    pendingFullscreenRetry = false;
+    delete stage.dataset.nocturnePseudoFullscreen;
 
     try {
       window.screen.orientation?.unlock?.();
@@ -620,10 +649,27 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     scheduleRelayout();
   };
 
+  const syncFullscreenState = (failedAttempt = false) => {
+    if (isStageFullscreen()) {
+      pendingFullscreenRetry = false;
+      delete stage.dataset.nocturnePseudoFullscreen;
+      return true;
+    }
+    stage.dataset.nocturnePseudoFullscreen = 'true';
+    if (failedAttempt) {
+      dbg('fullscreen rejected -> pseudo-fullscreen');
+      if (shown) shown.notify('Fullscreen unavailable (pseudo-fullscreen)');
+    }
+    return false;
+  };
+
   actions.exit = exit;
   actions.step = step;
   actions.fullscreen = () => {
-    requestFullscreen(stage).then(startStabilizeRelayout);
+    requestFullscreen(stage).then((ok) => {
+      syncFullscreenState(!ok);
+      startStabilizeRelayout();
+    });
   };
   actions.rotate = async () => {
     const canLock =
@@ -633,8 +679,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       const current = readOrientationAxis();
       const next = current === 'landscape' ? 'portrait' : 'landscape';
       lastTurnAt = performance.now();
+      dbg(`rotate: lock(${next}) call`);
       try {
         await window.screen.orientation.lock(next);
+        dbg(`rotate: lock(${next}) resolved`);
         heldOrientation = readOrientationState();
         if (shown) {
           shown.resetRotation();
@@ -642,7 +690,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
         }
         startStabilizeRelayout();
         return;
-      } catch {
+      } catch (error) {
+        dbg(`rotate: lock failed ${error?.name}`);
         // Desktop browsers or restricted frames reject orientation.lock.
       }
     }
@@ -652,13 +701,26 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   };
 
   const openStage = () => {
-    restoreThemeColor = applyBlackThemeColor();
+    unmountDebug = mountDebugLog(ui.shadow);
     stage.dataset.nocturnePlayer = '';
     pinStyle(stage, STAGE_STYLE);
     const stageStyle = document.createElement('style');
     stageStyle.dataset.nocturneStageStyle = '';
     stageStyle.textContent = STAGE_CSS;
     stage.append(stageStyle, ui.host);
+    scope.listen(
+      stage,
+      'click',
+      () => {
+        if (!pendingFullscreenRetry || !isActive) return;
+        pendingFullscreenRetry = false;
+        requestFullscreen(stage).then((ok) => {
+          syncFullscreenState(!ok);
+          scheduleRelayout();
+        });
+      },
+      true,
+    );
     for (const name of STAGE_BUBBLE_EVENTS) {
       const options = name.startsWith('touch') ? { passive: true } : undefined;
       scope.listen(stage, name, stopStageBubble, options);
@@ -671,7 +733,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     if (isStageFullscreen()) return;
     // Gecko may refuse this without a fresh gesture. The stage covers the
     // viewport on its own, so the player stays usable either way.
-    requestFullscreen(stage).then(scheduleRelayout);
+    requestFullscreen(stage).then(() => {
+      syncFullscreenState(false);
+      scheduleRelayout();
+    });
   };
 
   const watchForReturn = () => {
@@ -689,13 +754,16 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     // the fullscreen button is then one tap away. Gecko will not hand the
     // screen back without a tap, so the player cannot take it back itself.
     scope.listen(document, 'fullscreenchange', () => {
+      if (shown) shown.resetGestures();
       scheduleRelayout();
-      if (isStageFullscreen()) {
+      if (syncFullscreenState(false)) {
         heldOrientation = readOrientationState();
         return;
       }
+      dbg('stage lost fullscreen; deciding in RECOVER_DELAY_MS');
       scope.later(() => {
         if (!isActive) return;
+        dbg(`decide: backgrounded=${isBackgrounded()} turning=${isTurning()}`);
         if (isBackgrounded()) return;
         if (isTurning()) {
           heldOrientation = readOrientationState();
@@ -709,6 +777,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     // Coming back from a floating window or from another app: re-take the
     // screen and re-fit the picture to whatever shape it is now.
     scope.listen(document, 'visibilitychange', () => {
+      if (shown) shown.resetGestures();
       if (document.hidden) return;
       scope.later(() => {
         if (!isActive) return;
@@ -717,6 +786,9 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       }, RECOVER_DELAY_MS);
     });
 
+    scope.listen(window, 'blur', () => {
+      if (shown) shown.resetGestures();
+    });
     scope.listen(window, 'resize', scheduleRelayout);
     if (window.visualViewport) {
       scope.listen(window.visualViewport, 'resize', scheduleRelayout);
@@ -744,7 +816,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
 
     // The button that opens the player is drawn as a fullscreen icon, so it
     // takes the screen, every time.
-    await requestFullscreen(stage);
+    const ok = await requestFullscreen(stage);
+    if (!syncFullscreenState(!ok)) {
+      pendingFullscreenRetry = true;
+    }
     scheduleRelayout();
     return true;
   };

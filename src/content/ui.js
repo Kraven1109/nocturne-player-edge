@@ -24,6 +24,8 @@ import { isFeedShaped } from './gestures/swipe.js';
 import { ZONE } from './gestures/zones.js';
 
 const CHROME_IDLE_MS = 3000;
+const PINCH_ARM_PX = 12;
+const CLICK_DISARM_MS = 350;
 // Holding a side plays at the speed the sheet's 2x chip sets, forward — and
 // the same speed backward, which no browser plays, so it is stepped instead.
 const HOLD_RATE = 2;
@@ -227,10 +229,16 @@ export const createOverlay = ({
 
   let chromeTimer = null;
   let toastTimer = null;
+  let clickDisarmTimer = null;
   let pinchBase = 1;
   let skipTarget = null;
   let releaseHold = null;
+  let pinchArmed = false;
+  let hadChromeDown = false;
+  let swallowNextClick = false;
   let isVerticalGesturesOn = Boolean(settings.isVerticalGesturesOn);
+  const seenPointers = new Map();
+  const recognizerRef = { current: null };
 
   // A duration of null keeps the toast up until hideToast takes it down: the
   // 2x label stays for as long as the finger does.
@@ -301,6 +309,28 @@ export const createOverlay = ({
   const isPanelOpen = () =>
     colorPanel.isOpen() || menu.isOpen() || playlistRef.isOpen();
 
+  const isTouchActive = () =>
+    seenPointers.size > 0 ||
+    (recognizerRef.current?.getPointerCount() ?? 0) > 0;
+
+  const scheduleChromeIdle = () => {
+    if (chromeTimer !== null) clearTimeout(chromeTimer);
+    chromeTimer = null;
+    if (
+      chrome.hasAttribute('hidden') ||
+      video.paused ||
+      isPanelOpen() ||
+      isTouchActive()
+    ) {
+      return;
+    }
+    chromeTimer = setTimeout(() => {
+      chromeTimer = null;
+      if (isPanelOpen() || isTouchActive()) return;
+      chrome.toggleAttribute('hidden', true);
+    }, CHROME_IDLE_MS);
+  };
+
   // The chrome must never fade out from under an open panel: the panel lives
   // inside it, and hiding it mid-adjustment looked like the player had frozen.
   const setChromeVisible = (isVisible) => {
@@ -308,14 +338,12 @@ export const createOverlay = ({
     // next one has left the bar naming the one before it.
     if (isVisible) playlistRef.refresh();
     chrome.toggleAttribute('hidden', !isVisible);
-    if (chromeTimer !== null) clearTimeout(chromeTimer);
-    chromeTimer = null;
-    if (!isVisible || video.paused || isPanelOpen()) return;
-    chromeTimer = setTimeout(() => {
+    if (!isVisible) {
+      if (chromeTimer !== null) clearTimeout(chromeTimer);
       chromeTimer = null;
-      if (isPanelOpen()) return;
-      chrome.toggleAttribute('hidden', true);
-    }, CHROME_IDLE_MS);
+      return;
+    }
+    scheduleChromeIdle();
   };
 
   menuRef.showChrome = () => setChromeVisible(true);
@@ -528,11 +556,149 @@ export const createOverlay = ({
           dy: detail.dy ?? 0,
         });
       },
-      pinchEnd: () => visuals.endPinch(),
+      pinchEnd: () => {
+        visuals.endPinch();
+        if (swallowNextClick) {
+          if (clickDisarmTimer !== null) clearTimeout(clickDisarmTimer);
+          clickDisarmTimer = setTimeout(() => {
+            swallowNextClick = false;
+            clickDisarmTimer = null;
+          }, CLICK_DISARM_MS);
+        }
+      },
+      gestureReset: () => {
+        visuals.endPinch();
+        visuals.endPan();
+      },
       swipe: ({ direction }) => onFeedStep(direction),
     },
     { canSwipe, canVerticalDrag, canPan },
   );
+  recognizerRef.current = recognizer;
+
+  const disarmClickSwallow = () => {
+    swallowNextClick = false;
+    if (clickDisarmTimer !== null) {
+      clearTimeout(clickDisarmTimer);
+      clickDisarmTimer = null;
+    }
+  };
+
+  const armClickSwallow = () => {
+    if (!hadChromeDown) return;
+    swallowNextClick = true;
+    if (clickDisarmTimer !== null) clearTimeout(clickDisarmTimer);
+    clickDisarmTimer = setTimeout(disarmClickSwallow, CLICK_DISARM_MS);
+  };
+
+  const pairSpread = () => {
+    const pts = Array.from(seenPointers.values());
+    if (pts.length < 2) return 0;
+    return Math.hypot(
+      pts[0].clientX - pts[1].clientX,
+      pts[0].clientY - pts[1].clientY,
+    );
+  };
+
+  const resetGestures = () => {
+    seenPointers.clear();
+    pinchArmed = false;
+    hadChromeDown = false;
+    disarmClickSwallow();
+    recognizer.resetPointers();
+    visuals.endPinch();
+    visuals.endPan();
+    scheduleChromeIdle();
+  };
+
+  const tryArmShadowPinch = (event) => {
+    if (pinchArmed || isPanelOpen()) return false;
+    if (seenPointers.size < 2 || pairSpread() < PINCH_ARM_PX) return false;
+    pinchArmed = true;
+    armClickSwallow();
+    recognizer.adoptPointers(seenPointers);
+    event.stopPropagation();
+    return true;
+  };
+
+  const onShadowDown = (event) => {
+    if (
+      event.pointerType === 'touch' &&
+      event.isPrimary === true &&
+      seenPointers.size > 0 &&
+      !seenPointers.has(event.pointerId)
+    ) {
+      resetGestures();
+    }
+    if (!pinchArmed) {
+      disarmClickSwallow();
+      if (isPanelOpen()) return;
+      if (seenPointers.size === 0) {
+        hadChromeDown = chrome.contains(event.target);
+      }
+    }
+    seenPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (chromeTimer !== null) {
+      clearTimeout(chromeTimer);
+      chromeTimer = null;
+    }
+    if (tryArmShadowPinch(event)) return;
+    if (pinchArmed) {
+      event.stopPropagation();
+      recognizer.handlePointerEvent(event.type, event);
+    }
+  };
+
+  const onShadowMove = (event) => {
+    if (!seenPointers.has(event.pointerId)) return;
+    seenPointers.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (tryArmShadowPinch(event)) return;
+    if (!pinchArmed) return;
+    event.stopPropagation();
+    recognizer.handlePointerEvent(event.type, event);
+  };
+
+  const onShadowEnd = (event) => {
+    if (!seenPointers.has(event.pointerId)) return;
+    seenPointers.delete(event.pointerId);
+    if (pinchArmed) {
+      event.stopPropagation();
+      recognizer.handlePointerEvent(event.type, event);
+      if (seenPointers.size === 0) {
+        pinchArmed = false;
+        hadChromeDown = false;
+        if (swallowNextClick) {
+          if (clickDisarmTimer !== null) clearTimeout(clickDisarmTimer);
+          clickDisarmTimer = setTimeout(disarmClickSwallow, CLICK_DISARM_MS);
+        }
+        scheduleChromeIdle();
+      }
+    } else if (seenPointers.size === 0) {
+      hadChromeDown = false;
+      scheduleChromeIdle();
+    }
+  };
+
+  const onShadowClick = (event) => {
+    if (!swallowNextClick) return;
+    if (!chrome.contains(event.target)) return;
+    disarmClickSwallow();
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  shadow.addEventListener('pointerdown', onShadowDown, true);
+  shadow.addEventListener('pointermove', onShadowMove, true);
+  shadow.addEventListener('pointerup', onShadowEnd, true);
+  shadow.addEventListener('pointercancel', onShadowEnd, true);
+  shadow.addEventListener('lostpointercapture', onShadowEnd, true);
+  shadow.addEventListener('click', onShadowClick, true);
 
   buttons.play = buildButton(
     'Play or pause',
@@ -799,6 +965,7 @@ export const createOverlay = ({
   return {
     relayout: () => visuals.relayout(),
     repin: () => visuals.repin(),
+    resetGestures,
     getExpectedStyle: () => visuals.getExpectedStyle(),
     rotateQuarter: () => visuals.rotateQuarter(),
     resetRotation: () => visuals.resetRotation(),
@@ -806,8 +973,14 @@ export const createOverlay = ({
     setScreen,
     showControls: () => setChromeVisible(true),
     destroy: () => {
+      shadow.removeEventListener('pointerdown', onShadowDown, true);
+      shadow.removeEventListener('pointermove', onShadowMove, true);
+      shadow.removeEventListener('pointerup', onShadowEnd, true);
+      shadow.removeEventListener('pointercancel', onShadowEnd, true);
+      shadow.removeEventListener('lostpointercapture', onShadowEnd, true);
+      shadow.removeEventListener('click', onShadowClick, true);
+      resetGestures();
       for (const node of roots) node.remove();
-      visuals.endPan();
       volumeDrag.end();
       dimDrag.reset();
       recognizer.destroy();
@@ -820,6 +993,7 @@ export const createOverlay = ({
       stopHold();
       if (chromeTimer !== null) clearTimeout(chromeTimer);
       if (toastTimer !== null) clearTimeout(toastTimer);
+      if (clickDisarmTimer !== null) clearTimeout(clickDisarmTimer);
       clearChapterTimers();
       video.removeEventListener('loadedmetadata', handleSourceEvent);
       video.removeEventListener('durationchange', handleSourceEvent);
