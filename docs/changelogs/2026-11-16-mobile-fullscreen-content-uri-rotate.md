@@ -58,8 +58,12 @@
 - **Edge Canary Android 160 top bar / half-left landscape bar (`C1`–`C3` / `T1`–`T4`):** Confirmed on-device via `T1` (`video.requestFullscreen()`), `T2`, `T3` (`viewport-fit=cover`), `T4`, and extension-disabled runs: none remove the bar until the tab is refreshed. Documented as an upstream Edge Android bug, no longer blocking release.
 - **Host capture-phase touch/pointer listeners (`C1`):** DOM capture order (`window → document → stage`) is a browser platform constraint; measured on live mobile sites rather than intercepted.
 
-### Pending Physical Edge Android Verification (Pre-Publish Gate)
+### Verified on Physical Edge Canary Android (`[EMPIRICAL]`, `819ms`–`101080ms`)
 
-1. Verify pinch-to-zoom survives `> 5` minutes on `m.youtube.com` (including over `.chrome`), then remove temporary `debuglog.js` / `reportCall` hooks.
-2. Verify `screen.orientation.lock()` on real device and A/B bisect `fsEl=null` in embedded `384×216` iframes if reproducible without `07119be`.
-3. Verify `local.html` `<input type="file">` with Android `content://` media blobs (direct `content://` tabs remain blocked under MV3 `<all_urls>`).
+- Persistent pinch-to-zoom confirmed working cleanly.
+- Physical hardware orientation transitions and both Rotate button `screen.orientation.lock('portrait')` (`54231ms`) and `lock('landscape')` (`90391ms`) resolved and retained `fsEl=DIV[stage]` cleanly (`0` `styleGuard` cooldowns, `0` pseudo-fullscreen fallbacks).
+- Gated `debuglog.js` + `fullscreen.main.js` `reportCall` behind build flag `globalThis.__NOCTURNE_DEBUG__` (default `false`; opt in via `npm run build:debug` / `NOCTURNE_DEBUG=1`).
+
+### Remaining Check Before Store Publish
+
+- Confirm `local.html` `<input type="file">` with an Android `content://` media blob (direct `content://` tabs remain blocked under MV3 `<all_urls>`).

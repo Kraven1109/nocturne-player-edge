@@ -14,11 +14,11 @@ const LOCKED = [
 ];
 
 let isLocked = false;
+const DEBUG_FULLSCREEN = globalThis.__NOCTURNE_DEBUG__ === true;
 
-// TEMPORARY diagnostic: tell the isolated world about every call, with the
-// caller's stack. Remove with src/content/debuglog.js.
+// Diagnostic logger gated by build flag (--debug / NOCTURNE_DEBUG=1).
 const reportCall = (name, thisArg, blocked) => {
-  if (!isLocked) return;
+  if (!DEBUG_FULLSCREEN || !isLocked) return;
   try {
     const stack = String(new Error().stack || '')
       .split('\n')

@@ -20,6 +20,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs",
     "build:clean": "node esbuild.config.mjs --clean",
+    "build:debug": "node esbuild.config.mjs --debug",
     "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && cd dist && python3 -m zipfile -c ../artifacts/nocturne-edge.zip .",
     "start": "npm run build && microsoft-edge-stable --user-data-dir=$(mktemp -d /tmp/edge-nocturne-XXXXXX) --load-extension=./dist",
     "lint": "eslint . && prettier --check \"**/*.{js,mjs,json,md,css,html}\" && npm run lint:privacy",

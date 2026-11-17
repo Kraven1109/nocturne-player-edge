@@ -1,7 +1,6 @@
-// TEMPORARY diagnostic (docs/plans/2026-11-17-fullscreen-rotate-debug-log.md).
-// Remove together with the `dbg(...)` calls once the fullscreen-on-rotate loss
-// is understood. Everything here is inert when DEBUG_FULLSCREEN is false.
-export const DEBUG_FULLSCREEN = true;
+// Diagnostic overlay gated at build time (--debug / NOCTURNE_DEBUG=1).
+// Inert (false) in normal release builds and unit tests.
+export const DEBUG_FULLSCREEN = globalThis.__NOCTURNE_DEBUG__ === true;
 
 const MAX_LINES = 60;
 const lines = [];

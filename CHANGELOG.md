@@ -14,7 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - **Declarative CSS `!important` cascade + burst recovery (`session.js`, `visuals.js`):** Enforced layout and `--nocturne-{transform,filter,transition}` via `[data-nocturne-player] > video` `!important` in `STAGE_CSS`, reading custom properties from `stage.style` (never mutating `video.style` during gestures), treating normal inline overrides as intact (`0` repins), stripping inline `!important` overrides, and replacing permanent `MAX_REPINS = 240` cutoff with recovering exponential backoff (`5s → 15s → 45s`, cap `60s`).
   - **Fullscreen honesty & `07119be` revert (`session.js`):** Reverted `applyBlackThemeColor()` and root `:has()` color-scheme host overrides per M9 after Edge Canary `T1`–`T4` control tests proved the top/half-left bar is an upstream Edge Android tab bug cleared only by refreshing; added explicit `data-nocturne-pseudo-fullscreen` tracking and one-shot tap retry when `requestFullscreen()` rejects.
   - **Desktop Edge E2E regression (`test/e2e/pinch-rotate.mjs`):** Added 7 automated Pixel 7 CDP assertions covering `.play-button` pinch, 1-finger lift re-pinch, mid-pinch `resize` defer, immediate Play tap post-pinch, `>650` style mutation burst survival, light-DOM cascade integrity, and mid-pinch `blur` reset flush.
-  - **Temporary diagnostics retained (`debuglog.js`, `fullscreen.main.js`):** Kept on-device log overlay active per verification plan until real Edge Android confirms multi-minute pinch stability and rotate `fsEl` behavior.
+  - **Build-time debug flag (`esbuild.config.mjs`, `debuglog.js`, `fullscreen.main.js`):**
+    Gated on-screen debug logging behind `globalThis.__NOCTURNE_DEBUG__` (defaults
+    `false` in production builds/packages; opt in via `npm run build:debug` or
+    `NOCTURNE_DEBUG=1`) after 101s Edge Canary Android hardware verification
+    confirmed persistent zoom, physical orientation retention, and
+    `lock(portrait)` / `lock(landscape)` fullscreen retention.
 
 ## [0.11.0] - 2026-11-16
 
