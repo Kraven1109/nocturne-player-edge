@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-16  
 **Target Version:** `0.11.0` (post-Edge Add-ons Store release `0.10.0`, commit `b75c543`)  
-**Status:** Implemented & unit/desktop-Edge verified (`M1`–`M9`, `N1`–`N5` merged); physical Edge Android sideload (`.crx`) verification pending before Store upload.
+**Status:** `7d5a248`, `07119be`, `7bbdf44` merged to `main`; **NOT verified on physical Edge Android** — open audit defects remain in desktop CDP probe (controls-visible pinch occlusion, `document` capture-phase touch leakage, `MAX_REPINS = 240` cutoff) alongside unverified Android top strip, `screen.orientation.lock()`, and `content://` behavior (see [audit changelog](../changelogs/2026-11-16-mobile-fullscreen-content-uri-rotate.md)).
 
 ---
 

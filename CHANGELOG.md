@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
+- **Pinch-zoom partial hardening (`7bbdf44`, desktop Edge CDP verified with open gaps):**
+  - Anchored `pinchTo()` from `pinchOrigin` (`beginPinch({ focalX, focalY })`), dropped cover snap-back on `endPinch()` (`> 1.03` stays exact), guarded `recognizer.js` against post-release finger bounce (`MODE.ABANDONED`) and `pointercancel`, excluded `transform`/`filter` from `VIDEO_STYLE_KEYS` using `isVisualStyleIntact(video, overlay)`, stopped bubble propagation of touch/pointer events at `stage`, added `touch-action: none` to `:host`, and moved `window`/`visualViewport` `'resize'` to single-frame `scheduleRelayout`.
+  - **Known remaining gaps:** starting a pinch over visible `.chrome` sibling controls (`.centre-row`, `.topbar`, `.seek-area`) does not reach `.surface`, host `document`/`window` capture-phase listeners still receive events (`captureLeaksCount: 22` in probe), and `styleGuard` disconnects after `MAX_REPINS = 240`.
+- **Android fullscreen bar hint (`07119be`, unverified on Android):**
+  - Added reversible `applyBlackThemeColor()` (`#000000`), `html/body:has([data-nocturne-player])` `#000`/`color-scheme:dark`, and `#000000` `theme-color` in `local.html` to target Edge Android's `ToolbarControlContainer` dark strip. Not yet tested on physical Edge Android.
+
 ## [0.11.0] - 2026-11-16
 
 ### Added
@@ -26,12 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   implemented behind `screen.orientation.lock` and awaiting real Android Edge
   hardware test; desktop Edge falls back to CSS rotation.)*
 - **Focal-anchored pinch zoom (up to `4x`) & 2D 1-finger pan** (`zoom.js`,
-  `visuals.js`, `recognizer.js`): arbitrary zoom levels past fit and cover now
-  persist cleanly after lifting fingers (`snapPinchScale`), panning stays
-  clamped to rotated screen-space picture bounds (`computeDrawSize` +
-  `clampPan`) so black margins never appear, rotation changes re-clamp zoom
-  scale and pan bounds, and 1-finger dragging while zoomed pans smoothly across
-  any frame region.
+  `visuals.js`, `recognizer.js`): zoomed scales stay clamped to rotated
+  screen-space picture bounds (`computeDrawSize` + `clampPan`) so black margins
+  never appear, rotation changes re-clamp zoom scale and pan bounds, and
+  1-finger dragging while zoomed pans across any frame region. *(Note: initial
+  `7d5a248` `endPinch` cover-snap + `MutationObserver` repin loop caused
+  snap-back and flicker on phones; partially addressed in `Unreleased` `7bbdf44`,
+  still pending fix for visible `.chrome` control occlusion and Android test.)*
 
 ### Changed
 
