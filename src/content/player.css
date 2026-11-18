@@ -212,6 +212,31 @@
   filter: var(--icon-shadow);
 }
 
+.zoom-reset {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(118, 118, 128, 0.38);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 200ms var(--ease),
+    transform 200ms var(--ease);
+}
+
+.zoom-reset:active {
+  transform: scale(0.95);
+}
+
+.zoom-reset.is-hidden {
+  display: none;
+}
+
 /* Out of fullscreen there is a way back to it; in the small box the site gave
    the video, the sheets and the way out step aside to make room. */
 .chrome:not([data-windowed]) .is-windowed-only,
@@ -228,6 +253,14 @@
   inset: 0;
   pointer-events: auto;
   touch-action: none;
+}
+
+.surface.is-zoomed {
+  cursor: grab;
+}
+
+.surface.is-panning {
+  cursor: grabbing;
 }
 
 .seekbar {

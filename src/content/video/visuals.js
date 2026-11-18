@@ -31,7 +31,11 @@ const FIT = 'fit';
 const FILL = 'fill';
 const FREE = 'free';
 
-export const createVisuals = (video, stage) => {
+export const createVisuals = (
+  video,
+  stage,
+  { onScaleChange = () => {} } = {},
+) => {
   const colour = { saturate: 1, contrast: 1, brightness: 1 };
   const view = { scale: 1, x: 0, y: 0 };
 
@@ -112,6 +116,7 @@ export const createVisuals = (video, stage) => {
     view.x = pan.x;
     view.y = pan.y;
     apply();
+    onScaleChange(view.scale);
     return view.scale;
   };
 
@@ -171,6 +176,12 @@ export const createVisuals = (video, stage) => {
     const overflowX = (draw.drawWidth * view.scale - size.width) / 2;
     const overflowY = (draw.drawHeight * view.scale - size.height) / 2;
     return overflowX > PAN_EPSILON_PX || overflowY > PAN_EPSILON_PX;
+  };
+
+  const panOffset = (dx, dy) => {
+    view.x += dx;
+    view.y += dy;
+    place(view.scale);
   };
 
   apply();
@@ -258,11 +269,8 @@ export const createVisuals = (video, stage) => {
       isDragging = true;
       apply();
     },
-    panBy: (dx, dy) => {
-      view.x += dx;
-      view.y += dy;
-      place(view.scale);
-    },
+    panBy: panOffset,
+    stepPan: panOffset,
     endPan: () => {
       if (!isDragging) {
         flushPendingRelayout();
@@ -271,6 +279,16 @@ export const createVisuals = (video, stage) => {
       isDragging = false;
       apply();
       flushPendingRelayout();
+    },
+    resetZoom: () => {
+      isPinching = false;
+      isDragging = false;
+      pinchOrigin = null;
+      view.x = 0;
+      view.y = 0;
+      const applied = setScale(1);
+      flushPendingRelayout();
+      return applied;
     },
     rotateQuarter: () => {
       rotation = (rotation + 90) % 360;

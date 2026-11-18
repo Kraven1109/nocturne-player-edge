@@ -3,7 +3,6 @@ import { createShadowHost, el, pinStyle } from './shell.js';
 import { cacheHost, setSiteLoop } from './page/bridge.js';
 import { findFeedScroller, stepFeed, waitForNextVideo } from './video/feed.js';
 import { lockPageFullscreen } from './fullscreenlock.js';
-import { dbg, mountDebugLog } from './debuglog.js';
 import playerCss from './player.css';
 
 const STALL_GRACE_MS = 400;
@@ -102,6 +101,7 @@ const STAGE_BUBBLE_EVENTS = [
   'pointermove',
   'pointerup',
   'pointercancel',
+  'wheel',
 ];
 
 const stopStageBubble = (event) => {
@@ -371,7 +371,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   let stabilizeLastSize = null;
   let stabilizeMatches = 0;
   let unlockPageFullscreen = () => {};
-  let unmountDebug = () => {};
   let pendingFullscreenRetry = false;
   let lastTurnAt = -Infinity;
   let heldOrientation = readOrientationState();
@@ -490,7 +489,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       const burst = burstGuard.record(performance.now());
       if (burst.triggered) {
         if (styleGuard) styleGuard.disconnect();
-        dbg(`styleGuard cooldown ${burst.cooldownMs}ms`);
         rearmTimer = own.later(() => {
           rearmTimer = null;
           rearmGuard(false);
@@ -511,7 +509,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       burstGuard.resume({ resetBackoff });
       observeVideo();
       pin();
-      dbg('styleGuard re-armed');
     };
 
     video.replaceWith(anchor);
@@ -575,6 +572,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
         rearmGuard(true);
         overlay.resetGestures();
       },
+      handleKeyDown: (event) => overlay.handleKeyDown(event),
       showControls: () => overlay.showControls(),
       relayout: () => {
         rearmGuard(false);
@@ -588,9 +586,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   const exit = () => {
     if (!isActive) return;
     isActive = false;
-    dbg('exit() called', true);
-    unmountDebug();
-    unmountDebug = () => {};
 
     if (relayoutFrame !== 0) cancelAnimationFrame(relayoutFrame);
     relayoutFrame = 0;
@@ -657,7 +652,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     }
     stage.dataset.nocturnePseudoFullscreen = 'true';
     if (failedAttempt) {
-      dbg('fullscreen rejected -> pseudo-fullscreen');
       if (shown) shown.notify('Fullscreen unavailable (pseudo-fullscreen)');
     }
     return false;
@@ -679,10 +673,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       const current = readOrientationAxis();
       const next = current === 'landscape' ? 'portrait' : 'landscape';
       lastTurnAt = performance.now();
-      dbg(`rotate: lock(${next}) call`);
       try {
         await window.screen.orientation.lock(next);
-        dbg(`rotate: lock(${next}) resolved`);
         heldOrientation = readOrientationState();
         if (shown) {
           shown.resetRotation();
@@ -690,8 +682,7 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
         }
         startStabilizeRelayout();
         return;
-      } catch (error) {
-        dbg(`rotate: lock failed ${error?.name}`);
+      } catch {
         // Desktop browsers or restricted frames reject orientation.lock.
       }
     }
@@ -701,7 +692,6 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
   };
 
   const openStage = () => {
-    unmountDebug = mountDebugLog(ui.shadow);
     stage.dataset.nocturnePlayer = '';
     pinStyle(stage, STAGE_STYLE);
     const stageStyle = document.createElement('style');
@@ -722,7 +712,10 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
       true,
     );
     for (const name of STAGE_BUBBLE_EVENTS) {
-      const options = name.startsWith('touch') ? { passive: true } : undefined;
+      const options =
+        name === 'wheel' || name.startsWith('touch')
+          ? { passive: true }
+          : undefined;
       scope.listen(stage, name, stopStageBubble, options);
     }
     ui.shadow.append(layers.warm, layers.dim, loader);
@@ -760,10 +753,8 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
         heldOrientation = readOrientationState();
         return;
       }
-      dbg('stage lost fullscreen; deciding in RECOVER_DELAY_MS');
       scope.later(() => {
         if (!isActive) return;
-        dbg(`decide: backgrounded=${isBackgrounded()} turning=${isTurning()}`);
         if (isBackgrounded()) return;
         if (isTurning()) {
           heldOrientation = readOrientationState();
@@ -789,6 +780,12 @@ export const createSession = (firstVideo, { onExit, settings, onPersist }) => {
     scope.listen(window, 'blur', () => {
       if (shown) shown.resetGestures();
     });
+    scope.listen(
+      window,
+      'keydown',
+      (event) => shown?.handleKeyDown(event),
+      true,
+    );
     scope.listen(window, 'resize', scheduleRelayout);
     if (window.visualViewport) {
       scope.listen(window.visualViewport, 'resize', scheduleRelayout);

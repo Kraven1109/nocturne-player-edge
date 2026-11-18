@@ -87,12 +87,7 @@ const render = async () => {
 resetButton.addEventListener('click', async () => {
   await resetSettings();
   await clearIntroStore();
-  await openLocalButton.addEventListener('click', () => {
-    browser.tabs.create({ url: browser.runtime.getURL('local.html') });
-    window.close();
-  });
-
-  render();
+  await render();
   statusLine.textContent = 'Settings and learned intros reset.';
 });
 

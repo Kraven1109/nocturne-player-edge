@@ -174,3 +174,36 @@ test('visuals keeps free pinch scale and defers relayout cleanly', () => {
   assert.equal(visuals.endPinch(), 1);
   assert.equal(visuals.getExpectedStyle().transform, 'none');
 });
+
+test('visuals resetZoom keeps rotation, stepPan moves, and emits scale', () => {
+  const seenScales = [];
+  const stage = { getBoundingClientRect: () => ({ width: 800, height: 450 }) };
+  const video = {
+    videoWidth: 1920,
+    videoHeight: 1080,
+    style: { setProperty: () => {}, getPropertyValue: () => '' },
+  };
+  const visuals = createVisuals(video, stage, {
+    onScaleChange: (scale) => seenScales.push(scale),
+  });
+
+  visuals.rotateQuarter();
+  visuals.beginPinch({ focalX: 0, focalY: 0 });
+  visuals.pinchTo(4, { focalX: 0, focalY: 0 });
+  visuals.endPinch();
+  visuals.stepPan(-40, 30);
+  assert.match(
+    visuals.getExpectedStyle().transform,
+    /^translate\(-40px, 30px\) rotate\(90deg\) scale\(/,
+  );
+
+  assert.equal(visuals.resetZoom(), 1);
+  assert.equal(visuals.getScale(), 1);
+  assert.equal(visuals.getRotation(), 90);
+  visuals.stepPan(10, 10);
+  assert.match(
+    visuals.getExpectedStyle().transform,
+    /^translate\(0px, 0px\) rotate\(90deg\) scale\(/,
+  );
+  assert.equal(seenScales[seenScales.length - 1], 1);
+});

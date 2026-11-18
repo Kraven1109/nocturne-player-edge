@@ -7,60 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased][unreleased]
 
-- **Pinch-to-zoom, style guard, & fullscreen honesty (`P1`–`P6`, desktop Edge CDP verified):**
-  - **Shadow-root capture pre-emption (`ui.js`, `recognizer.js`):** Armed 2-finger pinch pre-emption in capture phase (`shadow`) when spread reaches `>= 12px` across `.chrome` controls or `.surface`, forwarding active pointers via `handlePointerEvent` / `adoptPointers` (`Map.set` dedupe), disarming post-pinch click suppression safely (`PINCH_ARM_PX = 12`, `CLICK_DISARM_MS = 350` + fresh `pointerdown`), and suspending `CHROME_IDLE_MS` while touches are active.
-  - **Re-pinch & orphan pointer recovery (`recognizer.js`, `ui.js`, `visuals.js`):** Allowed 2nd-finger re-pinch out of `MODE.ABANDONED` (`>= 12px`) anchored from current state, added primary-touch (`isPrimary`) stale-pointer cleanup, and enforced cross-invariant `resetGestures()` (`blur`/`visibilitychange`/`fullscreenchange`) clearing `isPinching`/`isDragging` and flushing deferred `relayout()`.
-  - **Zero-dim & deferred relayout guard (`visuals.js`, `zoom.js`):** Deferred `relayout()` via `pendingRelayout` during active pinch/pan and guarded `0x0` dimensions; unified reset threshold at `PINCH_RESET_THRESHOLD = 1.03` and removed unused `snapPinchScale`.
-  - **Declarative CSS `!important` cascade + burst recovery (`session.js`, `visuals.js`):** Enforced layout and `--nocturne-{transform,filter,transition}` via `[data-nocturne-player] > video` `!important` in `STAGE_CSS`, reading custom properties from `stage.style` (never mutating `video.style` during gestures), treating normal inline overrides as intact (`0` repins), stripping inline `!important` overrides, and replacing permanent `MAX_REPINS = 240` cutoff with recovering exponential backoff (`5s → 15s → 45s`, cap `60s`).
-  - **Fullscreen honesty & `07119be` revert (`session.js`):** Reverted `applyBlackThemeColor()` and root `:has()` color-scheme host overrides per M9 after Edge Canary `T1`–`T4` control tests proved the top/half-left bar is an upstream Edge Android tab bug cleared only by refreshing; added explicit `data-nocturne-pseudo-fullscreen` tracking and one-shot tap retry when `requestFullscreen()` rejects.
-  - **Desktop Edge E2E regression (`test/e2e/pinch-rotate.mjs`):** Added 7 automated Pixel 7 CDP assertions covering `.play-button` pinch, 1-finger lift re-pinch, mid-pinch `resize` defer, immediate Play tap post-pinch, `>650` style mutation burst survival, light-DOM cascade integrity, and mid-pinch `blur` reset flush.
-  - **Build-time debug flag (`esbuild.config.mjs`, `debuglog.js`, `fullscreen.main.js`):**
-    Gated on-screen debug logging behind `globalThis.__NOCTURNE_DEBUG__` (defaults
-    `false` in production builds/packages; opt in via `npm run build:debug` or
-    `NOCTURNE_DEBUG=1`) after 101s Edge Canary Android hardware verification
-    confirmed persistent zoom, physical orientation retention, and
-    `lock(portrait)` / `lock(landscape)` fullscreen retention.
-
-## [0.11.0] - 2026-11-16
+## [0.11.0] - 2026-11-18
 
 ### Added
 
 - Built-in offline local video launcher page (`local.html`, accessible via
   **Open local video** in the toolbar popup) so local files on Android Edge play
-  reliably inside Nocturne even where Chromium restricts content-script
-  injection on `content://` URIs, with automatic object-URL revocation on
-  `pagehide` and silent rejection of audio-only files.
+  inside Nocturne where Chromium restricts content-script injection on
+  `content://` URIs, with automatic object-URL revocation on `pagehide` and
+  silent rejection of audio-only files.
 - First-class `content:` protocol handling in `detect.js`, `introwatch.js`
   (Web Audio bypass matching `file:`), and `popup.js`.
 - Quick **Rotate** button in the fullscreen `.topbar` (`ui.js`): tries
   `screen.orientation.lock` when fullscreen (automatically resetting CSS
   rotation and updating orientation state on lock, and calling `unlock()` on
   `exit()`), falling back to quarter-turn CSS video rotation
-  (`0° → 90° → 180° → 270° → 0°`). *(Note: OS orientation lock path is
-  implemented behind `screen.orientation.lock` and awaiting real Android Edge
-  hardware test; desktop Edge falls back to CSS rotation.)*
-- **Focal-anchored pinch zoom (up to `4x`) & 2D 1-finger pan** (`zoom.js`,
-  `visuals.js`, `recognizer.js`): zoomed scales stay clamped to rotated
-  screen-space picture bounds (`computeDrawSize` + `clampPan`) so black margins
-  never appear, rotation changes re-clamp zoom scale and pan bounds, and
-  1-finger dragging while zoomed pans across any frame region. *(Note: initial
-  `7d5a248` `endPinch` cover-snap + `MutationObserver` repin loop caused
-  snap-back and flicker on phones; partially addressed in `Unreleased` `7bbdf44`,
-  still pending fix for visible `.chrome` control occlusion and Android test.)*
+  (`0° → 90° → 180° → 270° → 0°`). Verified on Edge Canary Android across sensor
+  turns and explicit `lock('portrait')` / `lock('landscape')`.
+- **Focal-anchored pinch zoom (up to `4x`) & 2D pan across mobile touch,
+  desktop touchpad, and keyboard** (`zoom.js`, `visuals.js`, `recognizer.js`,
+  `ui.js`, `player.css`):
+  - Multi-touch pinch anchors from `pinchOrigin`, preserves arbitrary zoom
+    levels above `PINCH_RESET_THRESHOLD = 1.03` on release, arms cleanly over
+    visible `.chrome` controls (`PINCH_ARM_PX = 12` capture forwarder), allows
+    re-pinching out of `ABANDONED`, heals orphaned primary touch pointers, and
+    keeps `clampPan` inside rotated screen-space picture bounds.
+  - **Laptop touchpad & desktop controls:** `Ctrl + wheel` touchpad pinch
+    zooms at pointer focal point; 2-finger `wheel` pans smoothly while zoomed;
+    mouse dragging displays `grab` / `grabbing` cursors on `.surface`.
+  - **Keyboard zoom/pan & one-tap reset:** `+`/`=` zooms in, `-`/`_` zooms out,
+    arrow keys (`ArrowLeft`/`Right`/`Up`/`Down`) pan zoomed frames,
+    `0`/`Backspace` or the topbar `.zoom-reset` pill (`N.N× ✕`) resets zoom and
+    pan cleanly to `1.0×` while keeping active rotation.
+- Playwright E2E regression suite `test/e2e/pinch-rotate.mjs` covering `.chrome`
+  pinch, re-pinch, mid-pinch resize defer, blur reset, >650-write CSS cascade /
+  `burstGuard` survival, desktop `Ctrl+wheel` pinch, arrow pan, and `.zoom-reset`.
 
-### Changed
+### Changed & Fixed
 
-- Applied web-layer fullscreen fixes (`session.js`): replaced fixed
-  `100vw`/`100vh` stage inline styles with `100%` + scoped `:fullscreen` and
-  `::backdrop` black backdrop rules, gated `{ navigationUI: 'hide' }` to
-  Chromium builds with `TypeError` fallback, tightened 180° sensor flip
-  detection (`readOrientationState`), and replaced single-frame relayout with a
-  dimension-change-gated `rAF` + `visualViewport.resize` stabilize loop. *(Note:
-  on Android devices where a top bar is drawn by Edge's native Custom Tab
-  View outside web DOM, device testing is still pending; use **Popup → Open
-  local video** as the guaranteed path.)*
-- Short-circuited `bridge.js` on `chrome-extension:` pages so `local.html` runs
-  cleanly without dispatching page-world bridge requests.
+- Enforced stage video layout and `--nocturne-{transform,filter,transition}` via
+  `[data-nocturne-player] > video` `!important` cascade rules in `STAGE_CSS`
+  bound to `stage.style` CSS variables (`session.js`, `visuals.js`), stripping
+  host inline `!important` overrides with sliding-window cooldown recovery
+  (`5s → 15s → 45s`, cap `60s`) instead of exhausting `MAX_REPINS`.
+- Deferred `relayout()` via `pendingRelayout` while `isPinching || isDragging`
+  and marked non-fullscreen fallbacks with explicit
+  `data-nocturne-pseudo-fullscreen` + one-shot click retry (`session.js`).
+- Gated `{ navigationUI: 'hide' }` to Chromium builds with `TypeError` fallback
+  and tightened 180° flip detection (`readOrientationState`), while short-circuiting
+  `bridge.js` on `chrome-extension:` pages (`local.html`).
+- Fixed duplicate `openLocalButton` listener attachment and missing `await`
+  before status text update in `popup.js` **Reset settings** handler (`S1`).
+- Removed temporary fullscreen debug overlay (`debuglog.js` and `reportCall`
+  diagnostics) after on-device Edge Canary Android confirmation (`S2`).
 
 ## [0.10.0] - 2026-11-16
 
@@ -104,6 +103,7 @@ Initial public release of **Nocturne Player for Edge** (Manifest V3), forked fro
 - Seekbar previews scrub directly on the main video with `seeked`-gated
   throttling instead of rendering a floating preview `<video>` thumbnail box.
 
-[unreleased]: https://github.com/Kraven1109/nocturne-player-edge/compare/main...HEAD
-[0.10.0]: https://github.com/Kraven1109/nocturne-player-edge
+[unreleased]: https://github.com/Kraven1109/nocturne-player-edge/compare/0.11.0...HEAD
+[0.11.0]: https://github.com/Kraven1109/nocturne-player-edge/compare/0.10.0...0.11.0
+[0.10.0]: https://github.com/Kraven1109/nocturne-player-edge/commits/b75c543
 [kvachikk/nocturne-player]: https://github.com/kvachikk/nocturne-player

@@ -91,6 +91,12 @@ const parseScale = (transform) => {
   return m ? Number(m[1]) : 1;
 };
 
+const parseTranslateX = (transform) => {
+  if (!transform || transform === 'none') return 0;
+  const parts = transform.match(/matrix\(([^)]+)\)/)?.[1].split(',');
+  return parts ? Number(parts[4]) : 0;
+};
+
 const run = async () => {
   const server = await startServer();
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-pinch-'));
@@ -277,6 +283,73 @@ const run = async () => {
     );
     assert.ok(parseScale(afterBlur) > 2.2);
     console.log('ok  R5 blur reset mid-pinch flushes cleanly');
+
+    // 8. Laptop touchpad Ctrl+wheel pinch, Arrow pan, and .zoom-reset pill
+    await page.keyboard.press('0');
+    await page.waitForTimeout(320);
+    const resetViaKey = await page.evaluate(
+      () => getComputedStyle(document.querySelector('video')).transform,
+    );
+    assert.equal(resetViaKey, 'none');
+
+    await page.mouse.move(200, 300);
+    await page.keyboard.down('Control');
+    for (let i = 0; i < 3; i++) {
+      await page.mouse.wheel(0, -80);
+    }
+    await page.keyboard.up('Control');
+    await page.waitForTimeout(240);
+    const afterWheel = await page.evaluate(
+      () => getComputedStyle(document.querySelector('video')).transform,
+    );
+    assert.ok(
+      parseScale(afterWheel) > 1.5,
+      `expected Ctrl+wheel scale > 1.5, got ${afterWheel}`,
+    );
+
+    const zr = await inShadow(cdp, function () {
+      const btn = this.querySelector('.zoom-reset');
+      const surf = this.querySelector('.surface');
+      return {
+        hidden: btn.classList.contains('is-hidden'),
+        text: btn.textContent,
+        zoomed: surf.classList.contains('is-zoomed'),
+        rect: btn.getBoundingClientRect().toJSON(),
+      };
+    });
+    assert.equal(zr.hidden, false);
+    assert.equal(zr.zoomed, true);
+    assert.ok(zr.text.includes('×'));
+
+    const txBefore = parseTranslateX(afterWheel);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(40);
+    const afterArrow = await page.evaluate(
+      () => getComputedStyle(document.querySelector('video')).transform,
+    );
+    assert.ok(
+      parseTranslateX(afterArrow) < txBefore,
+      `expected ArrowRight shift: ${txBefore} -> ${afterArrow}`,
+    );
+
+    await page.mouse.click(
+      zr.rect.x + zr.rect.width / 2,
+      zr.rect.y + zr.rect.height / 2,
+    );
+    await page.waitForTimeout(320);
+    const afterPillReset = await page.evaluate(
+      () => getComputedStyle(document.querySelector('video')).transform,
+    );
+    assert.equal(afterPillReset, 'none');
+    const zrAfter = await inShadow(cdp, function () {
+      return {
+        hidden:
+          this.querySelector('.zoom-reset').classList.contains('is-hidden'),
+        zoomed: this.querySelector('.surface').classList.contains('is-zoomed'),
+      };
+    });
+    assert.deepEqual(zrAfter, { hidden: true, zoomed: false });
+    console.log('ok  desktop touchpad pinch, Arrow pan, and reset pill pass');
   } finally {
     await ctx.close();
     server.close();

@@ -48,9 +48,6 @@ const bundles = [
 ];
 
 // Shipped unminified on purpose: reviewers and users read exactly what runs.
-const isDebug =
-  process.env.NOCTURNE_DEBUG === '1' || process.argv.includes('--debug');
-
 const bundleOptions = {
   bundle: true,
   format: 'iife',
@@ -61,9 +58,6 @@ const bundleOptions = {
   minify: false,
   sourcemap: false,
   loader: { '.css': 'text' },
-  define: {
-    'globalThis.__NOCTURNE_DEBUG__': JSON.stringify(isDebug),
-  },
 };
 
 // Files are overwritten in place rather than wiping the directory: removing and

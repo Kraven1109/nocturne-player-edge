@@ -1,4 +1,4 @@
-# Microsoft Edge Add-ons Store Listing Kit (`0.10.0`)
+# Microsoft Edge Add-ons Store Listing Kit (`0.11.0`)
 
 Ready-to-paste fields and reviewer notes for submitting **Nocturne Player for Edge** to [Microsoft Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/overview).
 
@@ -7,7 +7,7 @@ Ready-to-paste fields and reviewer notes for submitting **Nocturne Player for Ed
 ## 1. Basic Listing Metadata
 
 - **Extension Name:** `Nocturne Player for Edge`
-- **Version:** `0.10.0` (built by `npm run package` -> `artifacts/nocturne-edge.zip`)
+- **Version:** `0.11.0` (built by `npm run package` -> `artifacts/nocturne-edge.zip`)
 - **Primary Category:** `Productivity` _(or `Photos & Video` / `Entertainment`)_
 - **Website / Homepage URL:** `https://github.com/Kraven1109/nocturne-player-edge`
 - **Privacy Policy URL:** `https://github.com/Kraven1109/nocturne-player-edge/blob/main/PRIVACY.md`
@@ -32,8 +32,9 @@ Key Features:
 • Precision Seek Bar: drag smoothly to scrub directly on the main video (plus YouTube desktop & mobile chapter markers).
 • Gesture Controls:
   - Double-tap left/right to jump ±10s; hold sides for 2x / stepped rewind.
-  - Pinch to crop letterboxed black bars; swipe vertically on Shorts/Reels/TikTok feeds.
+  - Free pinch-zoom up to 4x on mobile touch & laptop touchpads (or + / - keys), 2D drag / arrow-key panning, one-tap Reset Zoom pill (or 0 / Backspace), Quick Rotate in fullscreen, and vertical swipes on Shorts/Reels/TikTok feeds.
   - Optional Vertical Edge Gestures (turn on in Settings → Gestures): swipe left edge to dim video frames (10%–99% or drag past bottom for AUTO) and swipe right edge to adjust volume/mute.
+• Built-In Offline Local Player: open local desktop or phone videos directly via Popup → "Open local video" (local.html) with instant object-URL cleanup and zero uploads.
 • Quality, Audio Track, Speed & Loop Picker: switch resolution/audio tracks on YouTube, hls.js, dash.js, Shaka Player, and Playerjs, or toggle per-video loop in Settings.
 • Local Subtitles & Night Light: load .srt/.vtt subtitle files and tune night light warmth, brightness, contrast, and saturation.
 • Privacy First: runs 100% locally on your device. No analytics, no remote servers, unminified build.
@@ -74,7 +75,7 @@ Copy this directly into the **Notes for Certification** box in Partner Center:
 
 1. Run `npm run validate:mv3 && npm run package` to generate `artifacts/nocturne-edge.zip`.
 2. Open [Microsoft Partner Center → Microsoft Edge](https://partner.microsoft.com/dashboard/microsoftedge/overview) and click **Create new extension**.
-3. Under **Packages**, upload `artifacts/nocturne-edge.zip` and verify manifest version `0.10.0` is detected with zero warnings.
+3. Under **Packages**, upload `artifacts/nocturne-edge.zip` and verify manifest version `0.11.0` is detected with zero warnings.
 4. Under **Properties**, select category **Accessibility** (or **Entertainment**), privacy policy URL `https://github.com/Kraven1109/nocturne-player-edge/blob/main/PRIVACY.md`, and support/website URL `https://github.com/Kraven1109/nocturne-player-edge`.
 5. Under **Store listings (en-US)**, paste Short Description & Detailed Description from §2 above, upload `docs/store/tile-300.png` as the `300×300` Store Logo, and upload `docs/store/screenshots/01..04.png`.
 6. Under **Notes for certification**, paste §3 above so reviewers see the `<all_urls>` / `world: "MAIN"` / offline privacy rationale immediately, then click **Publish**.

@@ -62,7 +62,8 @@
 
 - Persistent pinch-to-zoom confirmed working cleanly.
 - Physical hardware orientation transitions and both Rotate button `screen.orientation.lock('portrait')` (`54231ms`) and `lock('landscape')` (`90391ms`) resolved and retained `fsEl=DIV[stage]` cleanly (`0` `styleGuard` cooldowns, `0` pseudo-fullscreen fallbacks).
-- Gated `debuglog.js` + `fullscreen.main.js` `reportCall` behind build flag `globalThis.__NOCTURNE_DEBUG__` (default `false`; opt in via `npm run build:debug` / `NOCTURNE_DEBUG=1`).
+- Removed temporary `debuglog.js` and `reportCall` / `dbg` hooks after device confirmation (`S2`), and added desktop touchpad (`Ctrl+wheel` pinch, 2-finger pan), keyboard zoom/arrow-pan/reset (`+`/`-`/`0`/`Backspace`/Arrows), and `.zoom-reset` pill UI (`ui.js`, `visuals.js`, `player.css`, `pinch-rotate.mjs` assertion 8).
+- Fixed `popup.js` duplicate `openLocalButton` click listener + async `render()` race in Reset handler (`S1`).
 
 ### Remaining Check Before Store Publish
 

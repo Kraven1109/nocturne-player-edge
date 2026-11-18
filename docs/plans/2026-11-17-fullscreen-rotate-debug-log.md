@@ -1,6 +1,6 @@
 # Plan: Temporary fullscreen-on-rotate debug log
 
-**Date:** 2026-11-17 · **Status:** implemented as a TEMPORARY diagnostic (user approved: "chắc phải thêm debug log thôi").
+**Date:** 2026-11-17 · **Status:** completed & removed after hardware verification (`101s` Edge Canary Android log confirmed `fsEl=DIV[stage]` retained across sensor & button locks; harness removed cleanly from runtime bundles prior to Store submission).
 
 ## Evidence driving this
 

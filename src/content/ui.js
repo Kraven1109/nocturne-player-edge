@@ -19,6 +19,7 @@ import { createIntroWatch } from './video/introwatch.js';
 import { createLooper, isLoopAllowedForVideo } from './video/loop.js';
 import { createTrackManager } from './video/tracks.js';
 import { createVisuals } from './video/visuals.js';
+import { PINCH_RESET_THRESHOLD } from './video/zoom.js';
 import { el } from './shell.js';
 import { isFeedShaped } from './gestures/swipe.js';
 import { ZONE } from './gestures/zones.js';
@@ -26,6 +27,9 @@ import { ZONE } from './gestures/zones.js';
 const CHROME_IDLE_MS = 3000;
 const PINCH_ARM_PX = 12;
 const CLICK_DISARM_MS = 350;
+const WHEEL_SETTLE_MS = 180;
+const ZOOM_KEY_FACTOR = 1.25;
+const PAN_KEY_STEP_PX = 60;
 // Holding a side plays at the speed the sheet's 2x chip sets, forward — and
 // the same speed backward, which no browser plays, so it is stepped instead.
 const HOLD_RATE = 2;
@@ -183,6 +187,7 @@ export const createOverlay = ({
   // to things created after them.
   const buttons = {
     exit: null,
+    zoomReset: null,
     rotate: null,
     colour: null,
     menu: null,
@@ -201,7 +206,16 @@ export const createOverlay = ({
   // were watching, not to the next one.
   video.playbackRate = 1;
 
-  const visuals = createVisuals(video, stage);
+  const visuals = createVisuals(video, stage, {
+    onScaleChange: (scale) => {
+      const zoomed = scale > PINCH_RESET_THRESHOLD;
+      surface.classList.toggle('is-zoomed', zoomed);
+      if (!zoomed) surface.classList.remove('is-panning');
+      if (!buttons.zoomReset) return;
+      buttons.zoomReset.classList.toggle('is-hidden', !zoomed);
+      buttons.zoomReset.textContent = zoomed ? `${scale.toFixed(1)}× ✕` : '';
+    },
+  });
   const quality = createQuality(video, null, [createBridgeQualityAdapter]);
   const audio = createBridgeAudioTracks(video);
   const playlist = createPlaylist(video);
@@ -230,6 +244,8 @@ export const createOverlay = ({
   let chromeTimer = null;
   let toastTimer = null;
   let clickDisarmTimer = null;
+  let wheelTimer = null;
+  let wheelMode = null;
   let pinchBase = 1;
   let skipTarget = null;
   let releaseHold = null;
@@ -525,6 +541,7 @@ export const createOverlay = ({
       holdEnd: () => stopHold(),
       dragStart: (detail) => {
         if (detail.axis === 'pan') {
+          surface.classList.add('is-panning');
           visuals.beginPan();
           return;
         }
@@ -540,6 +557,7 @@ export const createOverlay = ({
       },
       dragEnd: (detail) => {
         if (detail.axis === 'pan') {
+          surface.classList.remove('is-panning');
           visuals.endPan();
           return;
         }
@@ -600,11 +618,23 @@ export const createOverlay = ({
     );
   };
 
+  const flushWheel = () => {
+    if (wheelTimer !== null) {
+      clearTimeout(wheelTimer);
+      wheelTimer = null;
+    }
+    if (wheelMode === 'pinch') visuals.endPinch();
+    else if (wheelMode === 'pan') visuals.endPan();
+    wheelMode = null;
+  };
+
   const resetGestures = () => {
     seenPointers.clear();
     pinchArmed = false;
     hadChromeDown = false;
     disarmClickSwallow();
+    flushWheel();
+    surface.classList.remove('is-panning');
     recognizer.resetPointers();
     visuals.endPinch();
     visuals.endPan();
@@ -693,12 +723,52 @@ export const createOverlay = ({
     event.stopPropagation();
   };
 
+  const DELTA_UNITS = { 1: 16, 2: 100 };
+
+  const onShadowWheel = (event) => {
+    if (isPanelOpen()) return;
+    const unit = DELTA_UNITS[event.deltaMode] ?? 1;
+    const dx = (event.deltaX || 0) * unit;
+    const dy = (event.deltaY || 0) * unit;
+    if (event.ctrlKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (wheelMode === 'pan') flushWheel();
+      const rect = surface.getBoundingClientRect();
+      const focalX = event.clientX - rect.left - rect.width / 2;
+      const focalY = event.clientY - rect.top - rect.height / 2;
+      if (wheelMode !== 'pinch') {
+        visuals.beginPinch({ focalX, focalY });
+        wheelMode = 'pinch';
+      }
+      const factor = Math.min(1.25, Math.max(0.8, Math.exp(-dy * 0.01)));
+      visuals.pinchTo(visuals.getScale() * factor, { focalX, focalY });
+      setChromeVisible(true);
+      if (wheelTimer !== null) clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(flushWheel, WHEEL_SETTLE_MS);
+      return;
+    }
+    if (visuals.canPan() && (dx !== 0 || dy !== 0)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (wheelMode === 'pinch') flushWheel();
+      if (wheelMode !== 'pan') {
+        visuals.beginPan();
+        wheelMode = 'pan';
+      }
+      visuals.panBy(-dx, -dy);
+      if (wheelTimer !== null) clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(flushWheel, WHEEL_SETTLE_MS);
+    }
+  };
+
   shadow.addEventListener('pointerdown', onShadowDown, true);
   shadow.addEventListener('pointermove', onShadowMove, true);
   shadow.addEventListener('pointerup', onShadowEnd, true);
   shadow.addEventListener('pointercancel', onShadowEnd, true);
   shadow.addEventListener('lostpointercapture', onShadowEnd, true);
   shadow.addEventListener('click', onShadowClick, true);
+  shadow.addEventListener('wheel', onShadowWheel, { passive: false });
 
   buttons.play = buildButton(
     'Play or pause',
@@ -785,6 +855,17 @@ export const createOverlay = ({
   };
   playlistRef.refresh();
 
+  buttons.zoomReset = el('button', {
+    class: 'zoom-reset is-hidden',
+    type: 'button',
+    title: 'Reset zoom (0)',
+  });
+  buttons.zoomReset.addEventListener('click', () => {
+    visuals.resetZoom();
+    showToast('Zoom: 1.0×');
+    setChromeVisible(true);
+  });
+
   buttons.rotate = buildButton('Rotate', ICON.rotate, () => {
     onRotate();
     setChromeVisible(true);
@@ -810,6 +891,7 @@ export const createOverlay = ({
     buttons.exit,
     buttons.playlist,
     el('div', { class: 'spacer' }),
+    buttons.zoomReset,
     buttons.rotate,
     buttons.colour,
     buttons.menu,
@@ -962,10 +1044,73 @@ export const createOverlay = ({
   introWatch.setEnabled(settings.isIntroSkipOn);
   setChromeVisible(isChromeShown);
 
+  const isEditableTarget = (event) => {
+    const target = event.composedPath?.()[0] ?? event.target;
+    if (!target || typeof target !== 'object') return false;
+    const tag = target.tagName;
+    return (
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      Boolean(target.isContentEditable)
+    );
+  };
+
+  const stepKeyZoom = (factor) => {
+    visuals.beginPinch({ focalX: 0, focalY: 0 });
+    visuals.pinchTo(visuals.getScale() * factor, { focalX: 0, focalY: 0 });
+    const next = visuals.endPinch();
+    setChromeVisible(true);
+    showToast(`Zoom: ${next.toFixed(1)}×`);
+  };
+
+  const PAN_KEY_DELTAS = {
+    ArrowLeft: [PAN_KEY_STEP_PX, 0],
+    ArrowRight: [-PAN_KEY_STEP_PX, 0],
+    ArrowUp: [0, PAN_KEY_STEP_PX],
+    ArrowDown: [0, -PAN_KEY_STEP_PX],
+  };
+
+  const handleKeyDown = (event) => {
+    if (isPanelOpen() || event.altKey || event.metaKey) return;
+    if (isEditableTarget(event)) return;
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      event.stopPropagation();
+      stepKeyZoom(ZOOM_KEY_FACTOR);
+      return;
+    }
+    if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      event.stopPropagation();
+      stepKeyZoom(1 / ZOOM_KEY_FACTOR);
+      return;
+    }
+    if (
+      (event.key === '0' || event.key === 'Backspace') &&
+      visuals.getScale() > 1
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      visuals.resetZoom();
+      showToast('Zoom: 1.0×');
+      return;
+    }
+    if (visuals.canPan() && !event.ctrlKey) {
+      const delta = PAN_KEY_DELTAS[event.key];
+      if (delta) {
+        event.preventDefault();
+        event.stopPropagation();
+        visuals.stepPan(delta[0], delta[1]);
+      }
+    }
+  };
+
   return {
     relayout: () => visuals.relayout(),
     repin: () => visuals.repin(),
     resetGestures,
+    handleKeyDown,
     getExpectedStyle: () => visuals.getExpectedStyle(),
     rotateQuarter: () => visuals.rotateQuarter(),
     resetRotation: () => visuals.resetRotation(),
@@ -979,6 +1124,7 @@ export const createOverlay = ({
       shadow.removeEventListener('pointercancel', onShadowEnd, true);
       shadow.removeEventListener('lostpointercapture', onShadowEnd, true);
       shadow.removeEventListener('click', onShadowClick, true);
+      shadow.removeEventListener('wheel', onShadowWheel, { passive: false });
       resetGestures();
       for (const node of roots) node.remove();
       volumeDrag.end();
@@ -994,6 +1140,7 @@ export const createOverlay = ({
       if (chromeTimer !== null) clearTimeout(chromeTimer);
       if (toastTimer !== null) clearTimeout(toastTimer);
       if (clickDisarmTimer !== null) clearTimeout(clickDisarmTimer);
+      if (wheelTimer !== null) clearTimeout(wheelTimer);
       clearChapterTimers();
       video.removeEventListener('loadedmetadata', handleSourceEvent);
       video.removeEventListener('durationchange', handleSourceEvent);
